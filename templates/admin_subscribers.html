@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div
+        class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">WhatsApp Subscribers</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary">Export</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Subscriber List</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="subscribersTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Phone Number</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Last Active</th>
+                            <th>Joined Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subscriber in subscribers %}
+                        <tr>
+                            <td>{{ subscriber.phone_number }}</td>
+                            <td>
+                                {% if subscriber.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if subscriber.latitude and subscriber.longitude %}
+                                <a href="https://www.google.com/maps?q={{ subscriber.latitude }},{{ subscriber.longitude }}"
+                                    target="_blank">
+                                    {{ "%.4f"|format(subscriber.latitude) }}, {{ "%.4f"|format(subscriber.longitude) }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ subscriber.last_active.strftime('%Y-%m-%d %H:%M') if subscriber.last_active else
+                                'Never' }}</td>
+                            <td>{{ subscriber.created_at.strftime('%Y-%m-%d') if subscriber.created_at else 'Unknown' }}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger" disabled
+                                    title="Delete functionality coming soon">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

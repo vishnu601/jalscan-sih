@@ -242,6 +242,7 @@ class MonitoringSite(db.Model):
     
     # NEW FIELD FOR RIVER CODE
     river_code = db.Column(db.String(50), unique=True)  # GANGA_HARIDWAR_001, etc.
+    flood_threshold = db.Column(db.Float, default=10.0)  # Water level threshold for flood alerts
     
     # Relationships
     site_user_assignments = db.relationship('UserSite', foreign_keys='UserSite.site_id', lazy=True, cascade='all, delete-orphan')
@@ -262,7 +263,8 @@ class MonitoringSite(db.Model):
             'state': self.state,
             'is_active': self.is_active,
             'created_by': self.created_by,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'flood_threshold': self.flood_threshold
         }
 
     def get_field_agents(self):
@@ -720,6 +722,53 @@ class AppConfig(db.Model):
 
     def __repr__(self):
         return f'<AppConfig {self.key}={self.value}>'
+
+class WhatsAppSubscriber(db.Model):
+    __tablename__ = 'whatsapp_subscribers'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    phone_number = db.Column(db.String(20), unique=True, nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    subscribed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_active = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'phone_number': self.phone_number,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'subscribed_at': self.subscribed_at.isoformat() if self.subscribed_at else None,
+            'is_active': self.is_active
+        }
+
+class FloodAlert(db.Model):
+    __tablename__ = 'flood_alerts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    site_id = db.Column(db.Integer, db.ForeignKey('monitoring_sites.id'), nullable=False)
+    alert_level = db.Column(db.String(20)) # warning, critical, severe
+    water_level = db.Column(db.Float)
+    message = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    subscribers_notified_count = db.Column(db.Integer, default=0)
+    
+    # Relationships
+    site = db.relationship('MonitoringSite', foreign_keys=[site_id], lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'site_id': self.site_id,
+            'site_name': self.site.name if self.site else None,
+            'alert_level': self.alert_level,
+            'water_level': self.water_level,
+            'message': self.message,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'subscribers_notified_count': self.subscribers_notified_count
+        }
 
 # Database utility functions
 def get_pending_submissions(user_id=None, max_retries=3):

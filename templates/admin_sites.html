@@ -73,6 +73,9 @@
                                         <button class="btn btn-outline-warning" data-bs-toggle="tooltip" title="Edit Site">
                                             <i class="bi bi-pencil"></i>
                                         </button>
+                                        <button class="btn btn-outline-danger" onclick="triggerAlert({{ site.id }}, '{{ site.name }}')" data-bs-toggle="tooltip" title="Send Manual Alert">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -204,6 +207,39 @@ function showAlert(message, type) {
             alertDiv.remove();
         }
     }, 5000);
+}
+
+async function triggerAlert(siteId, siteName) {
+    if (!confirm(`Are you sure you want to send a MANUAL FLOOD ALERT for ${siteName}? This will notify all subscribers in the area.`)) {
+        return;
+    }
+    
+    const message = prompt("Enter alert message (optional):", `MANUAL ALERT: Urgent update for ${siteName}. Please check the dashboard for details.`);
+    if (message === null) return; // User cancelled prompt
+    
+    try {
+        const response = await fetch('/api/admin/trigger-alert', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                site_id: siteId,
+                message: message
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert(result.message, 'success');
+        } else {
+            showAlert('Error: ' + result.error, 'danger');
+        }
+        
+    } catch (error) {
+        showAlert('Failed to send alert: ' + error.message, 'danger');
+    }
 }
 </script>
 {% endblock %}

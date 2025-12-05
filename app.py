@@ -1,13 +1,17 @@
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, send_file
+from dotenv import load_dotenv
+load_dotenv()
+from twilio.twiml.messaging_response import MessagingResponse
 from flask_login import LoginManager, current_user, login_required
 from config import config
-from models import db, User, MonitoringSite, WaterLevelSubmission, UserSite, SyncLog, PublicImageSubmission, TamperDetection, AppConfig
+from models import db, User, MonitoringSite, WaterLevelSubmission, UserSite, SyncLog, PublicImageSubmission, TamperDetection, AppConfig, WhatsAppSubscriber
 from auth import auth_bp
 import os
 from datetime import datetime, timedelta
 import logging
 from flask import current_app
 from sync_service import SyncService
+from whatsapp_service import WhatsAppService
 from functools import wraps
 from tamper_detection import TamperDetectionEngine, monitor_agent_behavior
 from werkzeug.security import generate_password_hash
@@ -47,6 +51,7 @@ def create_app(config_name='default'):
     # Initialize services
     sync_service = SyncService(app)
     tamper_engine = TamperDetectionEngine(app)  # Initialize tamper detection
+    whatsapp_service = WhatsAppService(app)  # Initialize WhatsApp service
     
     # Role-based access control decorators
     def role_required(roles):
@@ -333,6 +338,14 @@ def create_app(config_name='default'):
         users = User.query.filter_by(is_active=True).all()
         return render_template('admin_sites.html', sites=sites, users=users)
 
+    @app.route('/admin/subscribers')
+    @login_required
+    @role_required(['admin', 'supervisor'])
+    def admin_subscribers():
+        """WhatsApp subscribers management page"""
+        subscribers = WhatsAppSubscriber.query.order_by(WhatsAppSubscriber.last_active.desc()).all()
+        return render_template('admin_subscribers.html', subscribers=subscribers)
+
     @app.route('/api/admin/assign-site', methods=['POST'])
     @login_required
     @role_required(['admin', 'supervisor'])
@@ -368,6 +381,38 @@ def create_app(config_name='default'):
         except Exception as e:
             logging.error(f"Error assigning site: {e}")
             return jsonify({'success': False, 'error': 'Failed to assign site'})
+
+    @app.route('/api/admin/trigger-alert', methods=['POST'])
+    @login_required
+    @role_required(['admin', 'supervisor'])
+    def trigger_manual_alert():
+        """Trigger a manual flood alert"""
+        try:
+            data = request.get_json()
+            site_id = data.get('site_id')
+            message = data.get('message')
+            
+            if not site_id:
+                return jsonify({'success': False, 'error': 'Site ID is required'})
+            
+            site = MonitoringSite.query.get_or_404(site_id)
+            
+            # Check permissions for supervisor
+            if current_user.role == 'supervisor':
+                # Supervisors can only trigger alerts for their assigned river
+                if current_user.assigned_river != 'Multiple' and current_user.assigned_river != site.qr_code:
+                     return jsonify({'success': False, 'error': 'You can only trigger alerts for your assigned river'})
+
+            count = whatsapp_service.send_manual_alert(site, message)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Manual alert sent to {count} subscribers'
+            })
+            
+        except Exception as e:
+            logging.error(f"Error triggering manual alert: {e}")
+            return jsonify({'success': False, 'error': 'Failed to trigger alert'})
 
     # Field Agent Assignment API
     @app.route('/api/admin/assign-field-agent', methods=['POST'])
@@ -1446,6 +1491,12 @@ def create_app(config_name='default'):
             except Exception as sync_error:
                 logging.warning(f"Immediate sync failed: {sync_error}")
             
+            # Check for flood conditions and send alerts
+            try:
+                whatsapp_service.check_flood_conditions(submission)
+            except Exception as e:
+                logging.error(f"Error checking flood conditions: {e}")
+            
             return jsonify({
                 'success': True,
                 'submission_id': submission.id,
@@ -2225,6 +2276,40 @@ def create_app(config_name='default'):
             'csv_processing_configured': bool(LAST_CSV_URL)
         })
     
+    # WhatsApp Webhook Route
+    @app.route('/whatsapp/webhook', methods=['POST'])
+    def whatsapp_webhook():
+        """Handle incoming WhatsApp messages"""
+        logging.info("Webhook received a request!")
+        logging.info(f"Request values: {request.values}")
+        
+        # Check credentials
+        import os
+        if os.environ.get('TWILIO_AUTH_TOKEN'):
+            logging.info("Twilio Token is LOADED")
+        else:
+            logging.error("Twilio Token is MISSING")
+
+        try:
+            # Get message details
+            from_number = request.values.get('From', '')
+            body = request.values.get('Body', '')
+            latitude = request.values.get('Latitude')
+            longitude = request.values.get('Longitude')
+            
+            logging.info(f"Processing message from {from_number}: {body}")
+            
+            # Process message
+            response_text = whatsapp_service.handle_incoming_message(
+                from_number, body, latitude, longitude
+            )
+            
+            return response_text
+            
+        except Exception as e:
+            logging.error(f"Error in WhatsApp webhook: {e}")
+            return str(MessagingResponse())
+
     return app
 
 
@@ -2237,6 +2322,7 @@ def send_public_submission_notification(submission):
 if __name__ == '__main__':
     app = create_app()
     
+
     # Ensure upload directory exists
     with app.app_context():
         db.create_all()
@@ -2252,4 +2338,4 @@ if __name__ == '__main__':
         ]
     )
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=80)
