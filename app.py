@@ -2088,30 +2088,31 @@ def create_app(config_name='default'):
                 TamperDetection.detected_at.desc()
             ).limit(20).all()
             
-            # Get statistics
+            # Get statistics from TamperDetection table
             total_detections = TamperDetection.query.count()
             pending_review = TamperDetection.query.filter_by(review_status='pending').count()
             confirmed_tamper = TamperDetection.query.filter_by(review_status='confirmed').count()
+            false_positives = TamperDetection.query.filter_by(review_status='false_positive').count()
             
-            # Get suspicious submissions
+            # Get submission-based statistics
+            total_submissions = WaterLevelSubmission.query.count()
             suspicious_submissions = WaterLevelSubmission.query.filter(
                 WaterLevelSubmission.tamper_score > 0.7
             ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
             
-            # Get agent behavior alerts
-            agents = User.query.filter_by(role='field_agent', is_active=True).all()
-            agent_alerts = []
+            # Count submissions by tamper status
+            clean_submissions = WaterLevelSubmission.query.filter(
+                db.or_(
+                    WaterLevelSubmission.tamper_score == None,
+                    WaterLevelSubmission.tamper_score <= 0.3
+                )
+            ).count()
             
-            for agent in agents:
-                behavior = monitor_agent_behavior(agent.id)
-                if behavior['status'] in ['high', 'critical']:
-                    agent_alerts.append({
-                        'agent_id': agent.id,
-                        'agent_name': agent.username,
-                        'status': behavior['status'],
-                        'suspicious_ratio': behavior['suspicious_ratio'],
-                        'total_submissions': behavior['total_submissions']
-                    })
+            # Calculate average tamper score across all submissions
+            avg_score_result = db.session.query(
+                db.func.avg(WaterLevelSubmission.tamper_score)
+            ).filter(WaterLevelSubmission.tamper_score != None).scalar()
+            avg_tamper_score = round(avg_score_result or 0, 3)
             
             return jsonify({
                 'recent_detections': [d.to_dict() for d in recent_detections],
@@ -2119,15 +2120,19 @@ def create_app(config_name='default'):
                     'total_detections': total_detections,
                     'pending_review': pending_review,
                     'confirmed_tamper': confirmed_tamper,
-                    'suspicious_submissions': len(suspicious_submissions)
+                    'false_positives': false_positives,
+                    'suspicious_submissions': len(suspicious_submissions),
+                    'total_submissions': total_submissions,
+                    'clean_submissions': clean_submissions,
+                    'avg_tamper_score': avg_tamper_score
                 },
                 'suspicious_submissions': [s.to_dict() for s in suspicious_submissions],
-                'agent_alerts': agent_alerts
+                'agent_alerts': []
             })
             
         except Exception as e:
             logging.error(f"Error in tamper detection overview: {e}")
-            return jsonify({'error': 'Failed to load tamper detection data'})
+            return jsonify({'error': 'Failed to load tamper detection data', 'details': str(e)})
 
     @app.route('/api/tamper-detection/analyze-submission/<int:submission_id>')
     @login_required

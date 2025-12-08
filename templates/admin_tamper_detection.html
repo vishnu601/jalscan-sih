@@ -458,17 +458,18 @@
             const response = await fetch('/api/tamper-detection/overview');
             const data = await response.json();
 
-            document.getElementById('totalDetections').textContent = data.statistics.total_detections;
-            document.getElementById('pendingReview').textContent = data.statistics.pending_review;
-            document.getElementById('confirmedTamper').textContent = data.statistics.confirmed_tamper;
-            document.getElementById('suspiciousSubmissions').textContent = data.statistics.suspicious_submissions;
-            document.getElementById('agentAlerts').textContent = data.agent_alerts.length;
-
-            // Calculate average tamper score
-            if (data.suspicious_submissions.length > 0) {
-                const avgScore = data.suspicious_submissions.reduce((sum, sub) => sum + sub.tamper_score, 0) / data.suspicious_submissions.length;
-                document.getElementById('avgTamperScore').textContent = avgScore.toFixed(2);
+            if (data.error) {
+                console.error('API Error:', data.error);
+                return;
             }
+
+            // Update statistics cards with real data
+            document.getElementById('totalDetections').textContent = data.statistics.total_detections || 0;
+            document.getElementById('pendingReview').textContent = data.statistics.pending_review || 0;
+            document.getElementById('confirmedTamper').textContent = data.statistics.confirmed_tamper || 0;
+            document.getElementById('suspiciousSubmissions').textContent = data.statistics.suspicious_submissions || 0;
+            document.getElementById('cleanSubmissions').textContent = data.statistics.clean_submissions || 0;
+            document.getElementById('avgTamperScore').textContent = data.statistics.avg_tamper_score || '0.00';
 
         } catch (error) {
             console.error('Error loading overview stats:', error);
