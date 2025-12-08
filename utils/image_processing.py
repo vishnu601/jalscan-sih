@@ -65,9 +65,9 @@ def analyze_water_gauge(image_path):
     import google.generativeai as genai
     import json
     
-    api_key = os.environ.get('GEMINI_API_KEY')
+    api_key = os.environ.get('GOOGLE_API_KEY')
     if not api_key:
-        print("GEMINI_API_KEY not found in environment variables.")
+        print("GOOGLE_API_KEY not found in environment variables.")
         return None
         
     try:

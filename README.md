@@ -68,6 +68,27 @@ A comprehensive AI-powered water level monitoring and flood prediction system fo
 - **Multi-channel notifications** (WhatsApp, Email)
 - **Alert history tracking**
 
+### 🧠 River Memory AI (NEW!)
+India's first AI-powered **digital twin** for river monitoring:
+- **Water Color Analysis** - Detects silt, algae, pollution, flood sediment
+- **Flow Speed Estimation** - Optical flow & texture analysis (still/low/moderate/high/turbulent)
+- **Gauge Health Detection** - Algae, fading, damage, tilt monitoring
+- **Anomaly Detection** - Unusual behavior patterns with alerts
+- **Erosion Tracking** - SSIM-based riverbank change detection
+- **Digital Twin Dashboard** - Time-lapse visualization with AI annotations
+
+### 🌊 Flood Risk Prediction (NEW!)
+- **ML-powered risk predictions** using RandomForest
+- **24 engineered features** from water level history
+- **Risk categories**: SAFE, CAUTION, FLOOD_RISK, FLASH_FLOOD_RISK
+- **Real-time dashboard** with site cards and risk scores
+
+### 🤖 JalScan GPT Chatbot (NEW!)
+- **Conversational AI** for flood queries
+- **Intent detection** for flood risk, water levels, safety tips
+- **WhatsApp integration** for mobile access
+- **Floating chat widget** accessible from any page
+
 ---
 
 ## 🛠️ Tech Stack
@@ -98,6 +119,8 @@ A comprehensive AI-powered water level monitoring and flood prediction system fo
 | **Google Gemini API** | Water level detection from images |
 | **Twilio Voice API** | Phone call integration |
 | **Twilio WhatsApp API** | Messaging integration |
+| **OpenCV** | Computer vision for River Memory AI |
+| **scikit-learn** | ML for flood prediction |
 | **Ngrok** | Local tunnel for webhooks |
 
 ### Storage & Sync
@@ -142,6 +165,21 @@ jalscan-sih/
 ├── tamper_detection.py    # Tamper detection engine
 ├── sync_service.py        # Cloud sync service
 ├── whatsapp_service.py    # WhatsApp integration
+├── river_ai/              # River Memory AI package (NEW!)
+│   ├── gauge_detection.py # Water level CV detection
+│   ├── color_analysis.py  # Sediment classification
+│   ├── flow_estimation.py # Flow speed analysis
+│   ├── gauge_health.py    # Gauge condition monitoring
+│   ├── bank_erosion.py    # Erosion tracking
+│   └── pipeline.py        # Main orchestration
+├── ml/                    # Flood prediction ML (NEW!)
+│   ├── schemas.py         # Data structures
+│   ├── data_pipeline.py   # Feature extraction
+│   ├── model_train.py     # Training scripts
+│   └── model_inference.py # Prediction service
+├── services/              # Service modules (NEW!)
+│   ├── jalscan_gpt.py     # GPT chatbot
+│   └── river_memory_ai.py # Gemini-based analysis
 ├── templates/             # Jinja2 HTML templates
 ├── static/                # CSS, JS, images
 ├── uploads/               # User uploaded images
@@ -154,7 +192,7 @@ jalscan-sih/
 ## 🌐 Environment Variables
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_gemini_api_key_here
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_PHONE_NUMBER=your_twilio_number

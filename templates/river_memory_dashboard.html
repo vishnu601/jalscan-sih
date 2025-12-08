@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+
+{% block title %}River Memory AI - Digital Twin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold text-primary mb-1">
+                        <i class="bi bi-cpu me-2"></i>River Memory AI
+                    </h2>
+                    <p class="text-muted mb-0">Digital Twin for River Monitoring - India's First AI-Powered River Memory
+                        System</p>
+                </div>
+                <div>
+                    <select id="site-selector" class="form-select" onchange="loadSiteMemory()">
+                        <option value="">Select a site...</option>
+                        {% for site in sites %}
+                        <option value="{{ site.id }}">{{ site.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="row mb-4" id="overview-stats" style="display: none;">
+        <div class="col-md-2 mb-3">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-analyses">-</h4>
+                    <small>Total Analyses</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-visibility">-%</h4>
+                    <small>Avg Gauge Visibility</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-anomalies">-</h4>
+                    <small>Anomaly Rate</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-sediment">-</h4>
+                    <small>Primary Sediment</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="card bg-secondary text-white h-100">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-flow">-</h4>
+                    <small>Typical Flow</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="card bg-danger text-white h-100" id="erosion-card">
+                <div class="card-body text-center py-3">
+                    <h4 class="mb-0" id="stat-erosion">No</h4>
+                    <small>Erosion Detected</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left: Analysis Timeline -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>River Memory Timeline</h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary active" onclick="setTimeRange(7)">7 Days</button>
+                        <button class="btn btn-outline-primary" onclick="setTimeRange(30)">30 Days</button>
+                        <button class="btn btn-outline-primary" onclick="setTimeRange(90)">90 Days</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="timeline-container">
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-water" style="font-size: 3rem;"></i>
+                            <p class="mt-3">Select a monitoring site to view its River Memory</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Details -->
+            <div class="card shadow-sm mt-4" id="analysis-details" style="display: none;">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Latest AI Analysis</h5>
+                </div>
+                <div class="card-body" id="analysis-content">
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Site Insights -->
+        <div class="col-lg-4 mb-4">
+            <!-- Trend Summary -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-gradient text-white"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Trend Summary</h5>
+                </div>
+                <div class="card-body" id="trend-summary">
+                    <p class="text-muted text-center py-3">Select a site to view trends</p>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Active Alerts</h5>
+                </div>
+                <div class="card-body" id="alerts-container">
+                    <p class="text-muted text-center py-3">No active alerts</p>
+                </div>
+            </div>
+
+            <!-- Analysis Types Legend -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>River Memory Metrics</h6>
+                </div>
+                <div class="card-body p-2">
+                    <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                        <span class="badge bg-primary me-2">💧</span>
+                        <small><strong>Water Color</strong> - Sediment & pollution detection</small>
+                    </div>
+                    <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                        <span class="badge bg-info me-2">🌊</span>
+                        <small><strong>Flow Speed</strong> - Surface texture analysis</small>
+                    </div>
+                    <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                        <span class="badge bg-secondary me-2">📏</span>
+                        <small><strong>Gauge Condition</strong> - Visibility & damage</small>
+                    </div>
+                    <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                        <span class="badge bg-warning me-2">⚠️</span>
+                        <small><strong>Anomalies</strong> - Unusual behavior detection</small>
+                    </div>
+                    <div class="d-flex align-items-center p-2 bg-light rounded">
+                        <span class="badge bg-danger me-2">🏔️</span>
+                        <small><strong>Erosion</strong> - Riverbank change tracking</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .timeline-item {
+        border-left: 3px solid #dee2e6;
+        padding: 1rem 0 1rem 1.5rem;
+        position: relative;
+        margin-left: 1rem;
+    }
+
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -8px;
+        top: 1.25rem;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #6c757d;
+    }
+
+    .timeline-item.risk-low::before {
+        background: #28a745;
+    }
+
+    .timeline-item.risk-medium::before {
+        background: #ffc107;
+    }
+
+    .timeline-item.risk-high::before {
+        background: #dc3545;
+    }
+
+    .metric-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .analysis-card {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .analysis-card h6 {
+        color: #6c757d;
+        font-size: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .analysis-card .value {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+</style>
+
+<script>
+    let currentSiteId = null;
+    let currentDays = 30;
+
+    function loadSiteMemory() {
+        const siteId = document.getElementById('site-selector').value;
+        if (!siteId) {
+            document.getElementById('overview-stats').style.display = 'none';
+            document.getElementById('timeline-container').innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-water" style="font-size: 3rem;"></i>
+                <p class="mt-3">Select a monitoring site to view its River Memory</p>
+            </div>
+        `;
+            return;
+        }
+
+        currentSiteId = siteId;
+
+        // Show loading
+        document.getElementById('timeline-container').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Loading River Memory...</p>
+        </div>
+    `;
+
+        fetch(`/api/river-memory/site/${siteId}?days=${currentDays}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderSiteMemory(data);
+                } else {
+                    showError(data.error || 'Failed to load site memory');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Network error loading site memory');
+            });
+    }
+
+    function renderSiteMemory(data) {
+        // Show overview stats
+        document.getElementById('overview-stats').style.display = 'flex';
+
+        const memory = data.memory;
+
+        // Update stats
+        document.getElementById('stat-analyses').textContent = memory.analysis_count || 0;
+        document.getElementById('stat-visibility').textContent =
+            (memory.average_gauge_visibility || 0).toFixed(0) + '%';
+        document.getElementById('stat-anomalies').textContent =
+            ((memory.anomaly_frequency || 0) * 100).toFixed(0) + '%';
+
+        // Sediment distribution
+        const sediments = memory.sediment_distribution || {};
+        const topSediment = Object.entries(sediments).sort((a, b) => b[1] - a[1])[0];
+        document.getElementById('stat-sediment').textContent = topSediment ? topSediment[0] : '-';
+
+        // Flow distribution
+        const flows = memory.flow_distribution || {};
+        const topFlow = Object.entries(flows).sort((a, b) => b[1] - a[1])[0];
+        document.getElementById('stat-flow').textContent = topFlow ? topFlow[0] : '-';
+
+        // Erosion
+        const erosionCard = document.getElementById('erosion-card');
+        if (memory.erosion_ever_detected) {
+            erosionCard.classList.remove('bg-success');
+            erosionCard.classList.add('bg-danger');
+            document.getElementById('stat-erosion').textContent = 'Yes ⚠️';
+        } else {
+            erosionCard.classList.remove('bg-danger');
+            erosionCard.classList.add('bg-success');
+            document.getElementById('stat-erosion').textContent = 'No ✓';
+        }
+
+        // Trend summary
+        document.getElementById('trend-summary').innerHTML = `
+        <p class="mb-0">${memory.trend_summary || 'No trends detected'}</p>
+    `;
+
+        // Render timeline
+        renderTimeline(data.timeline || []);
+
+        // Show latest analysis
+        if (memory.latest_analysis) {
+            renderLatestAnalysis(memory.latest_analysis);
+        }
+    }
+
+    function renderTimeline(timeline) {
+        const container = document.getElementById('timeline-container');
+
+        if (!timeline || timeline.length === 0) {
+            container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <p class="mt-3">No analysis history for this site yet</p>
+                <small>Submit water level photos to build River Memory</small>
+            </div>
+        `;
+            return;
+        }
+
+        let html = '<div class="timeline">';
+
+        timeline.forEach(item => {
+            const riskClass = `risk-${item.overall_risk || 'low'}`;
+            const date = new Date(item.timestamp).toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            html += `
+            <div class="timeline-item ${riskClass}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <small class="text-muted">${date}</small>
+                        <div class="mt-1">
+                            <span class="metric-badge bg-primary text-white">
+                                💧 ${item.sediment_type || 'Unknown'}
+                            </span>
+                            <span class="metric-badge bg-info text-white">
+                                🌊 ${item.flow_speed_class || 'Unknown'}
+                            </span>
+                            <span class="metric-badge bg-secondary text-white">
+                                📏 ${item.gauge_visibility_score || 0}%
+                            </span>
+                        </div>
+                        ${item.anomaly_detected ? `
+                            <div class="mt-1">
+                                <span class="badge bg-warning text-dark">
+                                    ⚠️ ${item.anomaly_type}: ${item.anomaly_description || 'Anomaly detected'}
+                                </span>
+                            </div>
+                        ` : ''}
+                        ${item.erosion_detected ? `
+                            <div class="mt-1">
+                                <span class="badge bg-danger">🏔️ Erosion signs detected</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <span class="badge bg-${getRiskColor(item.overall_risk)}">
+                        ${(item.overall_risk || 'low').toUpperCase()}
+                    </span>
+                </div>
+            </div>
+        `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function renderLatestAnalysis(analysis) {
+        document.getElementById('analysis-details').style.display = 'block';
+
+        const ai = analysis.ai_analysis || {};
+
+        document.getElementById('analysis-content').innerHTML = `
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <h6>Water Color</h6>
+                <div class="value text-primary">
+                    ${ai.water_color?.sediment_type || analysis.sediment_type || '-'}
+                </div>
+                <small class="text-muted">${ai.water_color?.dominant_color || 'Unknown'}</small>
+            </div>
+            <div class="analysis-card">
+                <h6>Flow Speed</h6>
+                <div class="value text-info">
+                    ${ai.flow_analysis?.flow_class || analysis.flow_speed_class || '-'}
+                </div>
+                <small class="text-muted">Turbulence: ${ai.flow_analysis?.turbulence_score || analysis.turbulence_score || 0}%</small>
+            </div>
+            <div class="analysis-card">
+                <h6>Gauge Visibility</h6>
+                <div class="value text-success">
+                    ${ai.gauge_condition?.visibility_score || analysis.gauge_visibility_score || 0}%
+                </div>
+                <small class="text-muted">
+                    ${analysis.gauge_damage_detected ? '⚠️ Damage detected' : '✓ No damage'}
+                </small>
+            </div>
+            <div class="analysis-card">
+                <h6>Pollution Index</h6>
+                <div class="value ${analysis.pollution_index > 0.5 ? 'text-danger' : 'text-success'}">
+                    ${((analysis.pollution_index || 0) * 100).toFixed(0)}%
+                </div>
+                <small class="text-muted">
+                    ${analysis.pollution_index > 0.5 ? '⚠️ High' : '✓ Low'}
+                </small>
+            </div>
+        </div>
+        <div class="mt-3 p-3 bg-light rounded">
+            <strong>AI Summary:</strong> ${ai.summary || 'No summary available'}
+        </div>
+    `;
+    }
+
+    function getRiskColor(risk) {
+        return { 'low': 'success', 'medium': 'warning', 'high': 'danger' }[risk] || 'secondary';
+    }
+
+    function setTimeRange(days) {
+        currentDays = days;
+        document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+        if (currentSiteId) loadSiteMemory();
+    }
+
+    function showError(message) {
+        document.getElementById('timeline-container').innerHTML = `
+        <div class="text-center py-5">
+            <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-2">${message}</p>
+        </div>
+    `;
+    }
+</script>
+{% endblock %}

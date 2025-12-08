@@ -779,6 +779,131 @@ class FloodAlert(db.Model):
             'subscribers_notified_count': self.subscribers_notified_count
         }
 
+class FloodRiskPrediction(db.Model):
+    """Store ML flood risk predictions for monitoring and analysis"""
+    __tablename__ = 'flood_risk_predictions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    site_id = db.Column(db.Integer, db.ForeignKey('monitoring_sites.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Prediction results
+    risk_category = db.Column(db.String(30), nullable=False)  # SAFE, CAUTION, FLOOD_RISK, FLASH_FLOOD_RISK
+    risk_score = db.Column(db.Float, default=0.0)
+    confidence = db.Column(db.Float, default=0.0)
+    horizon_hours = db.Column(db.Integer, default=6)
+    
+    # Explanations and metadata
+    explanations = db.Column(db.Text)  # JSON array of explanation strings
+    key_factors = db.Column(db.Text)  # JSON object of feature:value pairs
+    recommendations = db.Column(db.Text)  # JSON array of recommendation strings
+    
+    # Model info
+    model_version = db.Column(db.String(20), default='1.0.0')
+    prediction_type = db.Column(db.String(20), default='scheduled')  # scheduled, on_demand
+    
+    # Relationships
+    site = db.relationship('MonitoringSite', foreign_keys=[site_id], lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'site_id': self.site_id,
+            'site_name': self.site.name if self.site else None,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'risk_category': self.risk_category,
+            'risk_score': self.risk_score,
+            'confidence': self.confidence,
+            'horizon_hours': self.horizon_hours,
+            'explanations': json.loads(self.explanations) if self.explanations else [],
+            'key_factors': json.loads(self.key_factors) if self.key_factors else {},
+            'recommendations': json.loads(self.recommendations) if self.recommendations else [],
+            'model_version': self.model_version,
+            'prediction_type': self.prediction_type
+        }
+    
+    def __repr__(self):
+        return f'<FloodRiskPrediction {self.id} - Site {self.site_id} - {self.risk_category}>'
+
+
+class RiverAnalysis(db.Model):
+    """Store River Memory AI analysis results for each image"""
+    __tablename__ = 'river_analyses'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey('water_level_submissions.id'), nullable=True)
+    site_id = db.Column(db.Integer, db.ForeignKey('monitoring_sites.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Water Level (detected or manual)
+    water_level_cm = db.Column(db.Float, nullable=True)
+    water_level_confidence = db.Column(db.Float, default=0.0)
+    
+    # Water Color Analysis
+    water_color_rgb = db.Column(db.String(50))  # JSON array [R, G, B]
+    sediment_type = db.Column(db.String(30))  # clear, silt, muddy, algae, pollution
+    pollution_index = db.Column(db.Float, default=0.0)  # 0-1 scale
+    
+    # Flow Analysis
+    flow_speed_class = db.Column(db.String(20))  # still, low, moderate, high, turbulent
+    turbulence_score = db.Column(db.Integer, default=0)  # 0-100
+    
+    # Gauge Condition
+    gauge_visibility_score = db.Column(db.Integer, default=100)  # 0-100
+    gauge_damage_detected = db.Column(db.Boolean, default=False)
+    damage_type = db.Column(db.String(200))  # Comma-separated: faded_numbers, broken_tiles, etc.
+    
+    # Anomaly Detection
+    anomaly_detected = db.Column(db.Boolean, default=False)
+    anomaly_type = db.Column(db.String(50))  # unusual_color, unusual_level, debris, obstruction
+    anomaly_description = db.Column(db.Text)
+    
+    # Erosion Tracking
+    erosion_detected = db.Column(db.Boolean, default=False)
+    erosion_change_pct = db.Column(db.Float, default=0.0)
+    
+    # Overall Assessment
+    overall_risk = db.Column(db.String(20), default='low')  # low, medium, high
+    
+    # Raw AI Output
+    ai_analysis_json = db.Column(db.Text)  # Full JSON from Gemini
+    
+    # Relationships
+    submission = db.relationship('WaterLevelSubmission', foreign_keys=[submission_id], lazy=True)
+    site = db.relationship('MonitoringSite', foreign_keys=[site_id], lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'submission_id': self.submission_id,
+            'site_id': self.site_id,
+            'site_name': self.site.name if self.site else None,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'water_color_rgb': json.loads(self.water_color_rgb) if self.water_color_rgb else None,
+            'sediment_type': self.sediment_type,
+            'pollution_index': self.pollution_index,
+            'flow_speed_class': self.flow_speed_class,
+            'turbulence_score': self.turbulence_score,
+            'gauge_visibility_score': self.gauge_visibility_score,
+            'gauge_damage_detected': self.gauge_damage_detected,
+            'damage_type': self.damage_type.split(',') if self.damage_type else [],
+            'anomaly_detected': self.anomaly_detected,
+            'anomaly_type': self.anomaly_type,
+            'anomaly_description': self.anomaly_description,
+            'erosion_detected': self.erosion_detected,
+            'erosion_change_pct': self.erosion_change_pct,
+            'overall_risk': self.overall_risk,
+            'ai_analysis': json.loads(self.ai_analysis_json) if self.ai_analysis_json else None
+        }
+    
+    def get_risk_color(self):
+        """Get Bootstrap color class for risk level"""
+        return {'low': 'success', 'medium': 'warning', 'high': 'danger'}.get(self.overall_risk, 'secondary')
+    
+    def __repr__(self):
+        return f'<RiverAnalysis {self.id} - Site {self.site_id} - Risk: {self.overall_risk}>'
+
+
 # Database utility functions
 def get_pending_submissions(user_id=None, max_retries=3):
     query = WaterLevelSubmission.query.filter(

@@ -24,6 +24,7 @@ import schedule
 import time
 import threading
 import csv
+import google.generativeai as genai
 
 # Add these global variables
 LAST_CSV_URL = None
@@ -57,6 +58,38 @@ def create_app(config_name='default'):
     tamper_engine = TamperDetectionEngine(app)  # Initialize tamper detection
     whatsapp_service = WhatsAppService(app)  # Initialize WhatsApp service
     
+    whatsapp_service = WhatsAppService(app)  # Initialize WhatsApp service
+    
+    # Configure Gemini API
+    if app.config.get('GOOGLE_API_KEY'):
+        genai.configure(api_key=app.config['GOOGLE_API_KEY'])
+        
+        # System Instruction for Crisis Assistant
+        SYSTEM_INSTRUCTION = """
+**Role**: You are a **Flood Safety Expert** and Crisis Response Assistant for the JalScan application. Your primary goal is to provide calm, authoritative, and life-saving advice during potential flood events.
+
+## Core Constraints (CRITICAL)
+1.  **NO HALLUCINATIONS**: You DO NOT have access to live river levels, sensor data, or current weather conditions unless they are explicitly provided in the user's message.
+    *   If a user asks "What is the water level right now?" or "Is it flooding?", you MUST reply: *"I do not have access to real-time sensor data. Please check the **Live Dashboard** on this app for the latest verified water levels."*
+2.  **SCOPE**: Limit your responses to:
+    *   Emergency Evacuation Procedures.
+    *   Emergency Kit Preparation (Go-Bags).
+    *   First Aid for waterborne injuries/illnesses.
+    *   General Flood Safety (electrical safety, structural integrity).
+
+## Tone and Style
+*   **Tone**: Calm, Authoritative, Reassuring, Concise.
+*   **Format**: Use bullet points for lists. Keep paragraphs short.
+*   **Urgency**: If the user seems in immediate danger (e.g., "water is entering my house"), advise them to **seek higher ground immediately** and contact local emergency services (112 or local equivalent).
+"""
+        crisis_model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+    else:
+        crisis_model = None
+        app.logger.warning("GOOGLE_API_KEY not found. Crisis Assistant will not function.")
+
     # Role-based access control decorators
     def role_required(roles):
         """Decorator to require specific role(s)"""
@@ -1747,6 +1780,26 @@ def create_app(config_name='default'):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     
+    @app.route('/api/crisis-chat', methods=['POST'])
+    def crisis_chat():
+        if not crisis_model:
+            return jsonify({'error': 'Crisis Assistant is unavailable (Service Misconfigured)'}), 503
+            
+        try:
+            data = request.json
+            user_message = data.get('message', '')
+            
+            if not user_message:
+                return jsonify({'error': 'Message is required'}), 400
+                
+            # Generate response
+            response = crisis_model.generate_content(user_message)
+            return jsonify({'response': response.text})
+            
+        except Exception as e:
+            app.logger.error(f"Crisis Chat Error: {str(e)}")
+            return jsonify({'error': 'Failed to process message'}), 500
+
     @app.route('/uploads/<filename>')
     @login_required
     def uploaded_file(filename):
@@ -2585,7 +2638,7 @@ def create_app(config_name='default'):
             app.background_services_initialized = True
     
     # === EXTERNAL AI CALL DATA SYNC ===
-    EXTERNAL_AI_CALL_API = "https://c0f5a079-6ee5-4602-80b4-b59d257051a2-00-3tsezt6p1ufiy.sisko.replit.dev/data/json"
+    EXTERNAL_AI_CALL_API = "https://0ebcaa8c-6200-4348-ba81-59a81e4dde75-00-3b8ylx78kwy2o.sisko.replit.dev/data/json"
     last_sync_count = {'value': 0}  # Track last synced record count
     
     def sync_external_voice_data():
@@ -2609,9 +2662,9 @@ def create_app(config_name='default'):
                 water_level_str = record.get('Water Level', '0')
                 ai_status = record.get('AI Status', 'Voice')
                 
-                # Parse water level (handle formats like "5 m" or "5 to 6 m")
+                # Parse water level (handle formats like "5 m" or "5 to 6 m" or "normal")
                 import re
-                numbers = re.findall(r'[\d.]+', water_level_str)
+                numbers = re.findall(r'\d+\.?\d*', water_level_str)
                 water_level = float(numbers[0]) if numbers else 0.0
                 
                 # Parse timestamp
@@ -2635,15 +2688,25 @@ def create_app(config_name='default'):
                 ).first()
                 
                 if not site and river_name:
-                    site = MonitoringSite(
-                        name=river_name.title(),
-                        river_code=river_id,
-                        latitude=0.0,
-                        longitude=0.0,
-                        is_active=True
-                    )
-                    db.session.add(site)
-                    db.session.commit()
+                    # Check if river_code already exists
+                    existing_site = MonitoringSite.query.filter_by(river_code=river_id).first()
+                    if existing_site:
+                        site = existing_site
+                    else:
+                        try:
+                            site = MonitoringSite(
+                                name=river_name.title(),
+                                river_code=river_id if river_id else None,
+                                latitude=0.0,
+                                longitude=0.0,
+                                is_active=True
+                            )
+                            db.session.add(site)
+                            db.session.commit()
+                        except Exception as site_error:
+                            db.session.rollback()
+                            logging.warning(f"Could not create site {river_name}: {site_error}")
+                            continue
                 
                 if site:
                     # Create submission
@@ -2771,6 +2834,103 @@ def create_app(config_name='default'):
     def weather_map():
         """Render Weather Map page"""
         return render_template('weather_map.html')
+
+    @app.route('/flood-risk')
+    @login_required
+    def flood_risk_dashboard():
+        """Render Flood Risk Dashboard page with AI predictions"""
+        return render_template('flood_risk_dashboard.html')
+
+    @app.route('/river-memory')
+    @login_required
+    def river_memory_dashboard():
+        """Render River Memory AI Dashboard - Digital Twin"""
+        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        return render_template('river_memory_dashboard.html', sites=sites)
+
+    @app.route('/api/river-memory/site/<int:site_id>')
+    @login_required
+    def get_river_memory(site_id):
+        """Get River Memory data for a site"""
+        try:
+            from services.river_memory_ai import river_memory_ai
+            from models import RiverAnalysis
+            
+            days = request.args.get('days', 30, type=int)
+            
+            # Get aggregated memory
+            memory = river_memory_ai.get_site_memory(site_id, days)
+            
+            # Get timeline of analyses
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            analyses = RiverAnalysis.query.filter(
+                RiverAnalysis.site_id == site_id,
+                RiverAnalysis.timestamp >= cutoff
+            ).order_by(RiverAnalysis.timestamp.desc()).limit(50).all()
+            
+            return jsonify({
+                'success': True,
+                'memory': memory,
+                'timeline': [a.to_dict() for a in analyses]
+            })
+            
+        except Exception as e:
+            logging.error(f"River memory error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/river-memory/analyze/<int:submission_id>', methods=['POST'])
+    @login_required
+    def analyze_submission_river(submission_id):
+        """Trigger River Memory AI analysis on a submission"""
+        try:
+            from services.river_memory_ai import analyze_submission
+            
+            result = analyze_submission(submission_id)
+            
+            return jsonify({
+                'success': 'error' not in result,
+                'analysis': result
+            })
+            
+        except Exception as e:
+            logging.error(f"River analysis error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/river-memory/timeline/<int:site_id>')
+    @login_required
+    def get_river_timeline(site_id):
+        """Get analysis timeline for visualization"""
+        try:
+            from models import RiverAnalysis
+            
+            days = request.args.get('days', 30, type=int)
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            
+            analyses = RiverAnalysis.query.filter(
+                RiverAnalysis.site_id == site_id,
+                RiverAnalysis.timestamp >= cutoff
+            ).order_by(RiverAnalysis.timestamp.asc()).all()
+            
+            # Format for chart visualization
+            timeline_data = {
+                'timestamps': [a.timestamp.isoformat() for a in analyses],
+                'turbulence': [a.turbulence_score or 0 for a in analyses],
+                'visibility': [a.gauge_visibility_score or 0 for a in analyses],
+                'sediment_types': [a.sediment_type or 'unknown' for a in analyses],
+                'flow_classes': [a.flow_speed_class or 'unknown' for a in analyses],
+                'anomalies': [a.anomaly_detected for a in analyses],
+                'erosion': [a.erosion_detected for a in analyses]
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': timeline_data,
+                'count': len(analyses)
+            })
+            
+        except Exception as e:
+            logging.error(f"River timeline error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     @app.route('/api/weather/check-alerts', methods=['POST'])
     @login_required
@@ -3002,7 +3162,165 @@ def create_app(config_name='default'):
             'csv_processing_configured': bool(LAST_CSV_URL)
         })
     
-    # WhatsApp Webhook Route
+    # === FLOOD RISK PREDICTION API ===
+    
+    @app.route('/api/flood-risk/predict', methods=['POST'])
+    def flood_risk_predict():
+        """
+        ML-based flood risk prediction for a monitoring site.
+        
+        Request Body:
+            monitoring_site_id: int (required)
+            timestamp: ISO datetime string (optional, default: now)
+            
+        Returns:
+            risk_category, risk_score, confidence, explanations, recommendations
+        """
+        try:
+            from ml.model_inference import get_predictor
+            from ml.schemas import PredictionRequest
+            
+            data = request.get_json() or {}
+            
+            site_id = data.get('monitoring_site_id')
+            if not site_id:
+                return jsonify({'success': False, 'error': 'monitoring_site_id is required'}), 400
+            
+            # Parse optional timestamp
+            timestamp = None
+            if data.get('timestamp'):
+                try:
+                    timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                except:
+                    timestamp = None
+            
+            # Get prediction
+            predictor = get_predictor()
+            pred_request = PredictionRequest(
+                monitoring_site_id=int(site_id),
+                timestamp=timestamp
+            )
+            response = predictor.predict(pred_request)
+            
+            # Optionally store prediction in DB
+            try:
+                from models import FloodRiskPrediction
+                import json as json_lib
+                
+                prediction_record = FloodRiskPrediction(
+                    site_id=site_id,
+                    timestamp=response.timestamp,
+                    risk_category=response.risk_category.value,
+                    risk_score=response.risk_score,
+                    confidence=response.confidence,
+                    horizon_hours=response.horizon_hours,
+                    explanations=json_lib.dumps(response.explanations),
+                    key_factors=json_lib.dumps(response.key_factors),
+                    recommendations=json_lib.dumps(response.recommendations),
+                    model_version=response.model_version,
+                    prediction_type='on_demand'
+                )
+                db.session.add(prediction_record)
+                db.session.commit()
+            except Exception as e:
+                logging.warning(f"Could not store prediction: {e}")
+            
+            return jsonify({
+                'success': True,
+                **response.to_dict()
+            })
+            
+        except Exception as e:
+            logging.error(f"Flood risk prediction error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/flood-risk/site/<int:site_id>')
+    def flood_risk_site(site_id):
+        """Get current flood risk for a specific site"""
+        try:
+            from ml.model_inference import get_predictor
+            from ml.schemas import PredictionRequest
+            
+            predictor = get_predictor()
+            pred_request = PredictionRequest(monitoring_site_id=site_id)
+            response = predictor.predict(pred_request)
+            
+            return jsonify({
+                'success': True,
+                **response.to_dict()
+            })
+            
+        except Exception as e:
+            logging.error(f"Site flood risk error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/flood-risk/all-sites')
+    def flood_risk_all_sites():
+        """Get flood risk for all active monitoring sites"""
+        try:
+            from ml.model_inference import get_predictor
+            
+            predictor = get_predictor()
+            results = predictor.get_all_site_risks()
+            
+            return jsonify({
+                'success': True,
+                'sites': results,
+                'count': len(results),
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            logging.error(f"All sites flood risk error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/flood-risk/history/<int:site_id>')
+    def flood_risk_history(site_id):
+        """Get prediction history for a site"""
+        try:
+            from models import FloodRiskPrediction
+            
+            limit = request.args.get('limit', 50, type=int)
+            
+            predictions = FloodRiskPrediction.query.filter_by(
+                site_id=site_id
+            ).order_by(FloodRiskPrediction.timestamp.desc()).limit(limit).all()
+            
+            return jsonify({
+                'success': True,
+                'predictions': [p.to_dict() for p in predictions],
+                'count': len(predictions)
+            })
+            
+        except Exception as e:
+            logging.error(f"Flood risk history error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/jalscan-gpt/chat', methods=['POST'])
+    def jalscan_gpt_chat():
+        """JalScan GPT chatbot endpoint for web dashboard"""
+        try:
+            from services.jalscan_gpt import answer_query
+            
+            data = request.get_json() or {}
+            message = data.get('message', '')
+            context = data.get('context', {})
+            
+            if not message:
+                return jsonify({'success': False, 'error': 'Message is required'}), 400
+            
+            response = answer_query(message, context)
+            
+            return jsonify({
+                'success': True,
+                'response': response
+            })
+            
+        except Exception as e:
+            logging.error(f"JalScan GPT error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    # WhatsApp Webhook Route (with JalScan GPT integration)
     @app.route('/whatsapp/webhook', methods=['POST'])
     def whatsapp_webhook():
         """Handle incoming WhatsApp messages"""
@@ -3025,7 +3343,32 @@ def create_app(config_name='default'):
             
             logging.info(f"Processing message from {from_number}: {body}")
             
-            # Process message
+            # Check if this is a flood/water level query for JalScan GPT
+            flood_keywords = ['flood', 'water level', 'risk', 'alert', 'danger', 'safe', 'prediction', 'forecast']
+            is_flood_query = any(keyword in body.lower() for keyword in flood_keywords)
+            
+            if is_flood_query:
+                try:
+                    from services.jalscan_gpt import answer_query
+                    
+                    context = {}
+                    if latitude and longitude:
+                        context['latitude'] = float(latitude)
+                        context['longitude'] = float(longitude)
+                    
+                    response_text = answer_query(body, context)
+                    
+                    # Send via Twilio
+                    from twilio.twiml.messaging_response import MessagingResponse
+                    resp = MessagingResponse()
+                    resp.message(response_text)
+                    return str(resp)
+                    
+                except Exception as e:
+                    logging.error(f"JalScan GPT error in WhatsApp: {e}")
+                    # Fall through to default handler
+            
+            # Process message with default WhatsApp service
             response_text = whatsapp_service.handle_incoming_message(
                 from_number, body, latitude, longitude
             )
@@ -3035,6 +3378,14 @@ def create_app(config_name='default'):
         except Exception as e:
             logging.error(f"Error in WhatsApp webhook: {e}")
             return str(MessagingResponse())
+
+    # Register River Memory AI routes
+    try:
+        from river_ai.api_routes import init_river_ai_routes
+        init_river_ai_routes(app, db)
+        logging.info("River Memory AI routes registered")
+    except ImportError as e:
+        logging.warning(f"River AI routes not available: {e}")
 
     return app
 

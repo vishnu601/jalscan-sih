@@ -9,7 +9,7 @@ A comprehensive AI-powered water level monitoring and flood prediction system fo
 ### 📷 Water Level Capture & Submission
 - **GPS-verified photo capture** with live camera feed
 - **AI-powered water level detection** using Google Gemini Vision API
-- **Automatic gauge reading** with confidence scoring
+- **AI Integration**: Uses Google Gemini (`GOOGLE_API_KEY`) for water gauge reading and chatbot assistance.
 - **Geofencing validation** ensures submissions from authorized locations
 - **Offline-first architecture** with automatic sync when online
 - **QR code verification** for site authentication
@@ -154,7 +154,7 @@ jalscan-sih/
 ## 🌐 Environment Variables
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_gemini_api_key
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_PHONE_NUMBER=your_twilio_number

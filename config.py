@@ -6,6 +6,9 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///jalscan.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # API Keys
+    GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY')
+    
     # Geofencing settings
     GEOFENCE_RADIUS_METERS = 50
     

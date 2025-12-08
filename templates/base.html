@@ -112,13 +112,34 @@
                     <i class="bi bi-map"></i>
                     <span class="nav-text">Weather Map</span>
                 </a>
+
+                <a href="{{ url_for('flood_risk_dashboard') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'flood_risk_dashboard' }}">
+                    <i class="bi bi-tsunami"></i>
+                    <span class="nav-text">Flood Risk</span>
+                </a>
+
+                <a href="{{ url_for('river_memory_dashboard') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'river_memory_dashboard' }}">
+                    <i class="bi bi-cpu"></i>
+                    <span class="nav-text">River Memory AI</span>
+                </a>
                 {% endif %}
             </div>
 
-            <!-- Sidebar Footer (Logout) -->
+            <!-- Sidebar Footer -->
             {% if current_user.is_authenticated %}
             <div class="mt-auto pb-3">
-                <a href="{{ url_for('auth.logout') }}" class="sidebar-nav-item text-danger">
+                <!-- JalScan GPT Helper Button -->
+                <a href="#" onclick="toggleJalScanGPT()" class="sidebar-nav-item jalscan-gpt-btn">
+                    <div class="gpt-icon-wrapper">
+                        <i class="bi bi-robot"></i>
+                        <span class="pulse-dot"></span>
+                    </div>
+                    <span class="nav-text">JalScan GPT</span>
+                </a>
+
+                <a href="{{ url_for('auth.logout') }}" class="sidebar-nav-item text-danger mt-2">
                     <i class="bi bi-box-arrow-right"></i>
                     <span class="nav-text">Logout</span>
                 </a>
@@ -773,7 +794,340 @@ ${message}
                 margin-bottom: 10px !important;
             }
         }
+
+        /* JalScan GPT Button Styles */
+        .jalscan-gpt-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            border-radius: 12px !important;
+            margin: 0 8px 8px 8px !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .jalscan-gpt-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .gpt-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+        }
+
+        .gpt-icon-wrapper i {
+            font-size: 1.3rem;
+        }
+
+        .pulse-dot {
+            position: absolute;
+            top: -2px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(1.2);
+            }
+        }
+
+        /* JalScan GPT Chat Widget */
+        .gpt-chat-widget {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            width: 380px;
+            max-width: calc(100vw - 40px);
+            height: 500px;
+            max-height: calc(100vh - 120px);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: none;
+            flex-direction: column;
+            z-index: 9999;
+            overflow: hidden;
+        }
+
+        .gpt-chat-widget.active {
+            display: flex;
+        }
+
+        .gpt-chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .gpt-chat-header .robot-avatar {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+        }
+
+        .gpt-chat-header h6 {
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .gpt-chat-header small {
+            opacity: 0.8;
+        }
+
+        .gpt-chat-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        .gpt-chat-close:hover {
+            opacity: 1;
+        }
+
+        .gpt-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+
+        .gpt-message {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .gpt-message.bot .avatar {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.8rem;
+        }
+
+        .gpt-message .bubble {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+        }
+
+        .gpt-message.bot .bubble {
+            background: white;
+            border: 1px solid #e9ecef;
+        }
+
+        .gpt-message.user {
+            flex-direction: row-reverse;
+        }
+
+        .gpt-message.user .bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .gpt-chat-input {
+            padding: 15px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+
+        .gpt-chat-input input {
+            flex: 1;
+            border: 1px solid #e9ecef;
+            border-radius: 20px;
+            padding: 10px 15px;
+            outline: none;
+        }
+
+        .gpt-chat-input input:focus {
+            border-color: #667eea;
+        }
+
+        .gpt-chat-input button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+        }
+
+        /* Floating GPT Button (for non-sidebar pages) */
+        .gpt-fab {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            z-index: 9998;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .gpt-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+        }
+
+        .gpt-fab .pulse-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.4);
+                opacity: 0;
+            }
+        }
     </style>
+
+    <!-- JalScan GPT Chat Widget -->
+    <div class="gpt-chat-widget" id="gpt-chat-widget">
+        <div class="gpt-chat-header">
+            <div class="robot-avatar">🤖</div>
+            <div>
+                <h6>JalScan GPT</h6>
+                <small>Flood Safety Assistant</small>
+            </div>
+            <button class="gpt-chat-close" onclick="toggleJalScanGPT()">&times;</button>
+        </div>
+        <div class="gpt-chat-messages" id="gpt-messages">
+            <div class="gpt-message bot">
+                <div class="avatar"><i class="bi bi-robot"></i></div>
+                <div class="bubble">
+                    👋 Hello! I'm JalScan GPT, your flood safety assistant. Ask me about:
+                    <br>• Water levels at any site
+                    <br>• Flood risk predictions
+                    <br>• Safety recommendations
+                </div>
+            </div>
+        </div>
+        <div class="gpt-chat-input">
+            <input type="text" id="gpt-input" placeholder="Ask about flood risk..."
+                onkeypress="if(event.key==='Enter')sendToGPT()">
+            <button onclick="sendToGPT()"><i class="bi bi-send-fill"></i></button>
+        </div>
+    </div>
+
+    <!-- Floating GPT Button (for mobile/non-sidebar views) -->
+    <button class="gpt-fab d-md-none" onclick="toggleJalScanGPT()">
+        <span class="pulse-ring"></span>
+        <i class="bi bi-robot"></i>
+    </button>
+
+    <script>
+        function toggleJalScanGPT() {
+            const widget = document.getElementById('gpt-chat-widget');
+            widget.classList.toggle('active');
+            if (widget.classList.contains('active')) {
+                document.getElementById('gpt-input').focus();
+            }
+        }
+
+        function sendToGPT() {
+            const input = document.getElementById('gpt-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const messagesDiv = document.getElementById('gpt-messages');
+
+            // Add user message
+            messagesDiv.innerHTML += `
+            <div class="gpt-message user">
+                <div class="bubble">${message}</div>
+            </div>
+        `;
+            input.value = '';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Add typing indicator
+            const typingId = 'typing-' + Date.now();
+            messagesDiv.innerHTML += `
+            <div class="gpt-message bot" id="${typingId}">
+                <div class="avatar"><i class="bi bi-robot"></i></div>
+                <div class="bubble"><em>Thinking...</em></div>
+            </div>
+        `;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Send to API
+            fetch('/api/jalscan-gpt/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: message })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById(typingId).remove();
+                    const response = data.response || data.error || 'Sorry, I could not process that.';
+                    messagesDiv.innerHTML += `
+                <div class="gpt-message bot">
+                    <div class="avatar"><i class="bi bi-robot"></i></div>
+                    <div class="bubble">${response.replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                })
+                .catch(err => {
+                    document.getElementById(typingId).remove();
+                    messagesDiv.innerHTML += `
+                <div class="gpt-message bot">
+                    <div class="avatar"><i class="bi bi-robot"></i></div>
+                    <div class="bubble text-danger">Connection error. Please try again.</div>
+                </div>
+            `;
+                });
+        }
+    </script>
 </body>
 
 </html>

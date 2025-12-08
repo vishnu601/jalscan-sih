@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}Flood Risk Dashboard - JalScan{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold text-primary mb-1">
+                        <i class="bi bi-tsunami me-2"></i>Flood Risk Dashboard
+                    </h2>
+                    <p class="text-muted mb-0">AI-powered flood predictions for all monitoring sites</p>
+                </div>
+                <button class="btn btn-primary" onclick="refreshAllPredictions()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Overview Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="safe-count">-</h3>
+                    <small>SAFE</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="caution-count">-</h3>
+                    <small>CAUTION</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-danger text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="flood-count">-</h3>
+                    <small>FLOOD RISK</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-dark text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="flash-count">-</h3>
+                    <small>FLASH FLOOD</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Site Risk Cards -->
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Sites Risk Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="sites-container" class="row">
+                        <div class="col-12 text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Loading predictions...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .site-card {
+        transition: transform 0.2s;
+        cursor: pointer;
+    }
+
+    .site-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .risk-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .chat-message {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .chat-user {
+        background: #e3f2fd;
+        margin-left: 20%;
+    }
+
+    .chat-bot {
+        background: #f5f5f5;
+        margin-right: 20%;
+    }
+</style>
+
+<script>
+    // Load predictions on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        loadAllSitePredictions();
+    });
+
+    function loadAllSitePredictions() {
+        fetch('/api/flood-risk/all-sites')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderSiteCards(data.sites);
+                    updateCounters(data.sites);
+                } else {
+                    showError('Failed to load predictions');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Network error loading predictions');
+            });
+    }
+
+    function renderSiteCards(sites) {
+        const container = document.getElementById('sites-container');
+
+        if (!sites || sites.length === 0) {
+            container.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-2">No monitoring sites found</p>
+            </div>
+        `;
+            return;
+        }
+
+        let html = '';
+        sites.forEach(site => {
+            const riskClass = getRiskClass(site.risk_category);
+            const riskIcon = getRiskIcon(site.risk_category);
+
+            html += `
+            <div class="col-md-6 mb-3">
+                <div class="card site-card border-${riskClass}" onclick="showSiteDetails(${site.monitoring_site_id})">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">${site.site_name || 'Site ' + site.monitoring_site_id}</h6>
+                                <span class="badge bg-${riskClass} risk-badge">
+                                    <i class="bi ${riskIcon} me-1"></i>${site.risk_category || 'UNKNOWN'}
+                                </span>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold">${(site.risk_score * 100).toFixed(0)}%</div>
+                                <small class="text-muted">confidence</small>
+                            </div>
+                        </div>
+                        ${site.explanations && site.explanations.length > 0 ?
+                    `<small class="text-muted d-block mt-2">${site.explanations[0]}</small>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function updateCounters(sites) {
+        const counts = { SAFE: 0, CAUTION: 0, FLOOD_RISK: 0, FLASH_FLOOD_RISK: 0 };
+        sites.forEach(site => {
+            if (counts.hasOwnProperty(site.risk_category)) {
+                counts[site.risk_category]++;
+            }
+        });
+
+        document.getElementById('safe-count').textContent = counts.SAFE;
+        document.getElementById('caution-count').textContent = counts.CAUTION;
+        document.getElementById('flood-count').textContent = counts.FLOOD_RISK;
+        document.getElementById('flash-count').textContent = counts.FLASH_FLOOD_RISK;
+    }
+
+    function getRiskClass(category) {
+        switch (category) {
+            case 'SAFE': return 'success';
+            case 'CAUTION': return 'warning';
+            case 'FLOOD_RISK': return 'danger';
+            case 'FLASH_FLOOD_RISK': return 'dark';
+            default: return 'secondary';
+        }
+    }
+
+    function getRiskIcon(category) {
+        switch (category) {
+            case 'SAFE': return 'bi-check-circle';
+            case 'CAUTION': return 'bi-exclamation-triangle';
+            case 'FLOOD_RISK': return 'bi-exclamation-octagon';
+            case 'FLASH_FLOOD_RISK': return 'bi-lightning';
+            default: return 'bi-question-circle';
+        }
+    }
+
+    function refreshAllPredictions() {
+        document.getElementById('sites-container').innerHTML = `
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted mt-2">Refreshing predictions...</p>
+        </div>
+    `;
+        loadAllSitePredictions();
+    }
+
+    function showSiteDetails(siteId) {
+        fetch(`/api/flood-risk/site/${siteId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`${data.site_name}\n\nRisk: ${data.risk_category}\nScore: ${(data.risk_score * 100).toFixed(0)}%\n\n${data.explanations.join('\n')}`);
+                }
+            });
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        // Add user message
+        addChatMessage(message, 'user');
+        input.value = '';
+
+        // Send to API
+        fetch('/api/jalscan-gpt/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addChatMessage(data.response, 'bot');
+                } else {
+                    addChatMessage('Sorry, I encountered an error.', 'bot');
+                }
+            })
+            .catch(error => {
+                addChatMessage('Network error. Please try again.', 'bot');
+            });
+    }
+
+    function addChatMessage(text, type) {
+        const container = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        div.className = `chat-message chat-${type}`;
+        div.innerHTML = text.replace(/\n/g, '<br>').replace(/\*/g, '');
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function showError(message) {
+        document.getElementById('sites-container').innerHTML = `
+        <div class="col-12 text-center py-5">
+            <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-2">${message}</p>
+            <button class="btn btn-outline-primary btn-sm" onclick="refreshAllPredictions()">Try Again</button>
+        </div>
+    `;
+    }
+</script>
+{% endblock %}
