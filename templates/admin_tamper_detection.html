@@ -9,6 +9,13 @@
                 Tamper Detection & Security
             </h2>
             <div>
+                <select id="dateRange" class="form-select form-select-sm d-inline-block me-2" style="width: auto;"
+                    onchange="changeDateRange()">
+                    <option value="7">Last 7 days</option>
+                    <option value="14">Last 14 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                </select>
                 <button class="btn btn-outline-warning me-2" onclick="runBatchAnalysis()">
                     <i class="bi bi-arrow-repeat"></i> Run Analysis
                 </button>
@@ -36,7 +43,7 @@
 <!-- Overview Cards -->
 <div class="row mb-4">
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-warning text-dark">
+        <div class="card bg-warning text-dark h-100">
             <div class="card-body text-center">
                 <i class="bi bi-exclamation-triangle display-6 mb-2"></i>
                 <h3 class="card-title" id="totalDetections">0</h3>
@@ -45,7 +52,7 @@
         </div>
     </div>
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-danger text-white">
+        <div class="card bg-danger text-white h-100">
             <div class="card-body text-center">
                 <i class="bi bi-clock display-6 mb-2"></i>
                 <h3 class="card-title" id="pendingReview">0</h3>
@@ -54,7 +61,7 @@
         </div>
     </div>
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-success text-white">
+        <div class="card bg-success text-white h-100">
             <div class="card-body text-center">
                 <i class="bi bi-check-circle display-6 mb-2"></i>
                 <h3 class="card-title" id="confirmedTamper">0</h3>
@@ -63,29 +70,115 @@
         </div>
     </div>
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-info text-white">
+        <div class="card bg-info text-white h-100">
             <div class="card-body text-center">
                 <i class="bi bi-person-check display-6 mb-2"></i>
                 <h3 class="card-title" id="suspiciousSubmissions">0</h3>
-                <p class="card-text">Suspicious Submissions</p>
+                <p class="card-text">Suspicious</p>
             </div>
         </div>
     </div>
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-primary text-white">
+        <div class="card bg-primary text-white h-100">
             <div class="card-body text-center">
-                <i class="bi bi-people display-6 mb-2"></i>
-                <h3 class="card-title" id="agentAlerts">0</h3>
-                <p class="card-text">Agent Alerts</p>
+                <i class="bi bi-shield-check display-6 mb-2"></i>
+                <h3 class="card-title" id="cleanSubmissions">0</h3>
+                <p class="card-text">Clean</p>
             </div>
         </div>
     </div>
     <div class="col-xl-2 col-md-4 col-6 mb-3">
-        <div class="card bg-dark text-white">
+        <div class="card bg-dark text-white h-100">
             <div class="card-body text-center">
                 <i class="bi bi-graph-up display-6 mb-2"></i>
                 <h3 class="card-title" id="avgTamperScore">0.0</h3>
-                <p class="card-text">Avg Tamper Score</p>
+                <p class="card-text">Avg Score</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trend Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Detection Trends</h6>
+            </div>
+            <div class="card-body">
+                <div id="trendChart" style="height: 250px;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm"></div>
+                        <p class="mt-2 text-muted">Loading trend data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-danger text-white">
+                <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Tamper Score Timeline</h6>
+            </div>
+            <div class="card-body">
+                <div id="scoreChart" style="height: 250px;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm"></div>
+                        <p class="mt-2 text-muted">Loading score data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Distribution Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>By Detection Type</h6>
+            </div>
+            <div class="card-body">
+                <div id="typeChart" style="height: 200px;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>By Severity Level</h6>
+            </div>
+            <div class="card-body">
+                <div id="severityChart" style="height: 200px;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-lightning-fill me-2"></i>Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-warning btn-sm" onclick="runBatchAnalysis()">
+                        <i class="bi bi-arrow-repeat me-1"></i>Analyze Recent Data
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="refreshData()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh Dashboard
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="exportSecurityReport()">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Security Report
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -135,25 +228,8 @@
         </div>
     </div>
 
-    <!-- Right Column - Agent Monitoring & Actions -->
+    <!-- Right Column - Security Actions -->
     <div class="col-lg-4">
-        <!-- Agent Behavior Alerts -->
-        <div class="card mb-4 border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-person-badge me-2"></i>
-                    Agent Behavior Alerts
-                </h5>
-            </div>
-            <div class="card-body p-0">
-                <div id="agentAlertsList" style="max-height: 200px; overflow-y: auto;">
-                    <div class="text-center py-3">
-                        <p class="text-muted mb-0">No agent alerts</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Quick Actions -->
         <div class="card mb-4">
             <div class="card-header">
@@ -172,9 +248,6 @@
                     </button>
                     <button class="btn btn-outline-danger btn-sm" onclick="exportSecurityReport()">
                         <i class="bi bi-file-earmark-pdf me-1"></i> Security Report
-                    </button>
-                    <button class="btn btn-outline-success btn-sm" onclick="openAgentMonitoring()">
-                        <i class="bi bi-person-lines-fill me-1"></i> Agent Monitoring
                     </button>
                 </div>
             </div>
@@ -228,65 +301,204 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Global variables
-let currentDetectionId = null;
+    // Global variables
+    let currentDetectionId = null;
+    let currentDays = 30;
+    let trendChart = null;
+    let scoreChart = null;
+    let typeChart = null;
+    let severityChart = null;
 
-// Initialize tamper detection dashboard
-async function initializeTamperDashboard() {
-    await loadOverviewStats();
-    await loadRecentDetections();
-    await loadSuspiciousSubmissions();
-    await loadAgentAlerts();
-    await loadDetectionTypesChart();
-}
-
-// Load overview statistics
-async function loadOverviewStats() {
-    try {
-        const response = await fetch('/api/tamper-detection/overview');
-        const data = await response.json();
-        
-        document.getElementById('totalDetections').textContent = data.statistics.total_detections;
-        document.getElementById('pendingReview').textContent = data.statistics.pending_review;
-        document.getElementById('confirmedTamper').textContent = data.statistics.confirmed_tamper;
-        document.getElementById('suspiciousSubmissions').textContent = data.statistics.suspicious_submissions;
-        document.getElementById('agentAlerts').textContent = data.agent_alerts.length;
-        
-        // Calculate average tamper score
-        if (data.suspicious_submissions.length > 0) {
-            const avgScore = data.suspicious_submissions.reduce((sum, sub) => sum + sub.tamper_score, 0) / data.suspicious_submissions.length;
-            document.getElementById('avgTamperScore').textContent = avgScore.toFixed(2);
-        }
-        
-    } catch (error) {
-        console.error('Error loading overview stats:', error);
+    // Initialize tamper detection dashboard
+    async function initializeTamperDashboard() {
+        await loadOverviewStats();
+        await loadTrendCharts();
+        await loadRecentDetections();
+        await loadSuspiciousSubmissions();
+        await loadAgentAlerts();
     }
-}
 
-// Load recent tamper detections
-async function loadRecentDetections() {
-    try {
-        const response = await fetch('/api/tamper-detection/overview');
-        const data = await response.json();
-        
-        const container = document.getElementById('recentDetections');
-        
-        if (!data.recent_detections || data.recent_detections.length === 0) {
-            container.innerHTML = `
+    // Change date range
+    function changeDateRange() {
+        currentDays = parseInt(document.getElementById('dateRange').value);
+        loadTrendCharts();
+    }
+
+    // Refresh all data
+    function refreshData() {
+        showToast('Refreshing dashboard...', 'info');
+        initializeTamperDashboard();
+    }
+
+    // Load trend charts
+    async function loadTrendCharts() {
+        try {
+            const response = await fetch(`/api/tamper-detection/trends?days=${currentDays}`);
+            const data = await response.json();
+
+            // Detection Trends Chart
+            const trendCtx = document.createElement('canvas');
+            document.getElementById('trendChart').innerHTML = '';
+            document.getElementById('trendChart').appendChild(trendCtx);
+
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(trendCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.trends.labels,
+                    datasets: [{
+                        label: 'Detections',
+                        data: data.trends.detections,
+                        backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Detections' } }
+                    }
+                }
+            });
+
+            // Tamper Score Timeline
+            const scoreCtx = document.createElement('canvas');
+            document.getElementById('scoreChart').innerHTML = '';
+            document.getElementById('scoreChart').appendChild(scoreCtx);
+
+            if (scoreChart) scoreChart.destroy();
+            scoreChart = new Chart(scoreCtx, {
+                type: 'line',
+                data: {
+                    labels: data.scores.labels,
+                    datasets: [{
+                        label: 'Avg Score',
+                        data: data.scores.avg_scores,
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }, {
+                        label: 'Max Score',
+                        data: data.scores.max_scores,
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        y: { beginAtZero: true, max: 1, title: { display: true, text: 'Tamper Score' } }
+                    }
+                }
+            });
+
+            // By Type Chart
+            const typeCtx = document.createElement('canvas');
+            document.getElementById('typeChart').innerHTML = '';
+            document.getElementById('typeChart').appendChild(typeCtx);
+
+            if (typeChart) typeChart.destroy();
+            typeChart = new Chart(typeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.by_type.labels.length > 0 ? data.by_type.labels : ['No Data'],
+                    datasets: [{
+                        data: data.by_type.data.length > 0 ? data.by_type.data : [1],
+                        backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } }
+                }
+            });
+
+            // By Severity Chart
+            const severityCtx = document.createElement('canvas');
+            document.getElementById('severityChart').innerHTML = '';
+            document.getElementById('severityChart').appendChild(severityCtx);
+
+            if (severityChart) severityChart.destroy();
+            severityChart = new Chart(severityCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.by_severity.labels.length > 0 ? data.by_severity.labels : ['No Data'],
+                    datasets: [{
+                        label: 'Count',
+                        data: data.by_severity.data.length > 0 ? data.by_severity.data : [0],
+                        backgroundColor: ['#17a2b8', '#ffc107', '#dc3545', '#343a40']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+        } catch (error) {
+            console.error('Error loading trend charts:', error);
+            document.getElementById('trendChart').innerHTML = '<div class="alert alert-warning">No trend data available</div>';
+        }
+    }
+
+    // Load overview statistics
+    async function loadOverviewStats() {
+        try {
+            const response = await fetch('/api/tamper-detection/overview');
+            const data = await response.json();
+
+            document.getElementById('totalDetections').textContent = data.statistics.total_detections;
+            document.getElementById('pendingReview').textContent = data.statistics.pending_review;
+            document.getElementById('confirmedTamper').textContent = data.statistics.confirmed_tamper;
+            document.getElementById('suspiciousSubmissions').textContent = data.statistics.suspicious_submissions;
+            document.getElementById('agentAlerts').textContent = data.agent_alerts.length;
+
+            // Calculate average tamper score
+            if (data.suspicious_submissions.length > 0) {
+                const avgScore = data.suspicious_submissions.reduce((sum, sub) => sum + sub.tamper_score, 0) / data.suspicious_submissions.length;
+                document.getElementById('avgTamperScore').textContent = avgScore.toFixed(2);
+            }
+
+        } catch (error) {
+            console.error('Error loading overview stats:', error);
+        }
+    }
+
+    // Load recent tamper detections
+    async function loadRecentDetections() {
+        try {
+            const response = await fetch('/api/tamper-detection/overview');
+            const data = await response.json();
+
+            const container = document.getElementById('recentDetections');
+
+            if (!data.recent_detections || data.recent_detections.length === 0) {
+                container.innerHTML = `
                 <div class="text-center py-4">
                     <i class="bi bi-check-circle text-success display-6 mb-2"></i>
                     <p class="text-muted mb-0">No tamper detections found</p>
                 </div>
             `;
-            return;
-        }
-        
-        let html = '';
-        data.recent_detections.forEach(detection => {
-            const severityClass = getSeverityClass(detection.severity);
-            const timeAgo = getTimeAgo(detection.detected_at);
-            
-            html += `
+                return;
+            }
+
+            let html = '';
+            data.recent_detections.forEach(detection => {
+                const severityClass = getSeverityClass(detection.severity);
+                const timeAgo = getTimeAgo(detection.detected_at);
+
+                html += `
                 <div class="border-bottom p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
@@ -313,38 +525,38 @@ async function loadRecentDetections() {
                     </div>
                 </div>
             `;
-        });
-        
-        container.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading recent detections:', error);
-    }
-}
+            });
 
-// Load suspicious submissions
-async function loadSuspiciousSubmissions() {
-    try {
-        const response = await fetch('/api/tamper-detection/overview');
-        const data = await response.json();
-        
-        const container = document.getElementById('suspiciousSubmissionsList');
-        
-        if (!data.suspicious_submissions || data.suspicious_submissions.length === 0) {
-            container.innerHTML = `
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading recent detections:', error);
+        }
+    }
+
+    // Load suspicious submissions
+    async function loadSuspiciousSubmissions() {
+        try {
+            const response = await fetch('/api/tamper-detection/overview');
+            const data = await response.json();
+
+            const container = document.getElementById('suspiciousSubmissionsList');
+
+            if (!data.suspicious_submissions || data.suspicious_submissions.length === 0) {
+                container.innerHTML = `
                 <div class="text-center py-4">
                     <p class="text-muted mb-0">No suspicious submissions</p>
                 </div>
             `;
-            return;
-        }
-        
-        let html = '';
-        data.suspicious_submissions.forEach(submission => {
-            const tamperClass = submission.tamper_score > 0.8 ? 'danger' : 'warning';
-            const timeAgo = getTimeAgo(submission.timestamp);
-            
-            html += `
+                return;
+            }
+
+            let html = '';
+            data.suspicious_submissions.forEach(submission => {
+                const tamperClass = submission.tamper_score > 0.8 ? 'danger' : 'warning';
+                const timeAgo = getTimeAgo(submission.timestamp);
+
+                html += `
                 <div class="border-bottom p-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="flex-grow-1">
@@ -360,37 +572,37 @@ async function loadSuspiciousSubmissions() {
                     </div>
                 </div>
             `;
-        });
-        
-        container.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading suspicious submissions:', error);
-    }
-}
+            });
 
-// Load agent alerts
-async function loadAgentAlerts() {
-    try {
-        const response = await fetch('/api/tamper-detection/overview');
-        const data = await response.json();
-        
-        const container = document.getElementById('agentAlertsList');
-        
-        if (!data.agent_alerts || data.agent_alerts.length === 0) {
-            container.innerHTML = `
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading suspicious submissions:', error);
+        }
+    }
+
+    // Load agent alerts
+    async function loadAgentAlerts() {
+        try {
+            const response = await fetch('/api/tamper-detection/overview');
+            const data = await response.json();
+
+            const container = document.getElementById('agentAlertsList');
+
+            if (!data.agent_alerts || data.agent_alerts.length === 0) {
+                container.innerHTML = `
                 <div class="text-center py-3">
                     <p class="text-muted mb-0">No agent alerts</p>
                 </div>
             `;
-            return;
-        }
-        
-        let html = '';
-        data.agent_alerts.forEach(alert => {
-            const statusClass = alert.status === 'critical' ? 'danger' : 'warning';
-            
-            html += `
+                return;
+            }
+
+            let html = '';
+            data.agent_alerts.forEach(alert => {
+                const statusClass = alert.status === 'critical' ? 'danger' : 'warning';
+
+                html += `
                 <div class="border-bottom p-3">
                     <div class="d-flex align-items-start">
                         <i class="bi bi-exclamation-triangle-fill text-${statusClass} me-2 mt-1"></i>
@@ -402,249 +614,251 @@ async function loadAgentAlerts() {
                     </div>
                 </div>
             `;
-        });
-        
-        container.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading agent alerts:', error);
-    }
-}
-
-// Load detection types chart
-async function loadDetectionTypesChart() {
-    try {
-        const response = await fetch('/api/tamper-detection/overview');
-        const data = await response.json();
-        
-        // Count detection types from recent detections
-        const typeCounts = {};
-        if (data.recent_detections) {
-            data.recent_detections.forEach(detection => {
-                typeCounts[detection.detection_type] = (typeCounts[detection.detection_type] || 0) + 1;
             });
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading agent alerts:', error);
         }
-        
-        const ctx = document.createElement('canvas');
-        document.getElementById('detectionTypesChart').innerHTML = '';
-        document.getElementById('detectionTypesChart').appendChild(ctx);
-        
-        const chart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(typeCounts),
-                datasets: [{
-                    data: Object.values(typeCounts),
-                    backgroundColor: [
-                        '#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 12
+    }
+
+    // Load detection types chart
+    async function loadDetectionTypesChart() {
+        try {
+            const response = await fetch('/api/tamper-detection/overview');
+            const data = await response.json();
+
+            // Count detection types from recent detections
+            const typeCounts = {};
+            if (data.recent_detections) {
+                data.recent_detections.forEach(detection => {
+                    typeCounts[detection.detection_type] = (typeCounts[detection.detection_type] || 0) + 1;
+                });
+            }
+
+            const ctx = document.createElement('canvas');
+            document.getElementById('detectionTypesChart').innerHTML = '';
+            document.getElementById('detectionTypesChart').appendChild(ctx);
+
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(typeCounts),
+                    datasets: [{
+                        data: Object.values(typeCounts),
+                        backgroundColor: [
+                            '#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12
+                            }
                         }
                     }
                 }
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error loading detection types chart:', error);
-    }
-}
+            });
 
-// Utility functions
-function getSeverityClass(severity) {
-    const classes = {
-        'low': 'bg-info',
-        'medium': 'bg-warning',
-        'high': 'bg-danger',
-        'critical': 'bg-dark'
-    };
-    return classes[severity] || 'bg-secondary';
-}
-
-function getTimeAgo(timestamp) {
-    if (!timestamp) return 'Unknown';
-    
-    const now = new Date();
-    const time = new Date(timestamp);
-    const diffMs = now - time;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${Math.floor(diffHours / 24)}d ago`;
-}
-
-// Action functions
-async function runBatchAnalysis() {
-    try {
-        const response = await fetch('/api/tamper-detection/run-batch-analysis', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: 30 })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Batch analysis completed successfully', 'success');
-            initializeTamperDashboard(); // Refresh data
-        } else {
-            showToast('Analysis failed: ' + result.error, 'danger');
+        } catch (error) {
+            console.error('Error loading detection types chart:', error);
         }
-        
-    } catch (error) {
-        showToast('Analysis request failed', 'danger');
     }
-}
 
-function reviewDetection(detectionId) {
-    currentDetectionId = detectionId;
-    
-    // For now, just show a simple review interface
-    const modalContent = document.getElementById('reviewDetectionContent');
-    modalContent.innerHTML = `
+    // Utility functions
+    function getSeverityClass(severity) {
+        const classes = {
+            'low': 'bg-info',
+            'medium': 'bg-warning',
+            'high': 'bg-danger',
+            'critical': 'bg-dark'
+        };
+        return classes[severity] || 'bg-secondary';
+    }
+
+    function getTimeAgo(timestamp) {
+        if (!timestamp) return 'Unknown';
+
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diffMs = now - time;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${Math.floor(diffHours / 24)}d ago`;
+    }
+
+    // Action functions
+    async function runBatchAnalysis() {
+        try {
+            const response = await fetch('/api/tamper-detection/run-batch-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ days: 30 })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Batch analysis completed successfully', 'success');
+                initializeTamperDashboard(); // Refresh data
+            } else {
+                showToast('Analysis failed: ' + result.error, 'danger');
+            }
+
+        } catch (error) {
+            showToast('Analysis request failed', 'danger');
+        }
+    }
+
+    function reviewDetection(detectionId) {
+        currentDetectionId = detectionId;
+
+        // For now, just show a simple review interface
+        const modalContent = document.getElementById('reviewDetectionContent');
+        modalContent.innerHTML = `
         <p>Review tamper detection #${detectionId}</p>
         <div class="mb-3">
             <label class="form-label">Review Notes</label>
             <textarea class="form-control" id="reviewNotes" rows="3" placeholder="Add review notes..."></textarea>
         </div>
     `;
-    
-    const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
-    modal.show();
-}
 
-async function confirmTamper() {
-    if (!currentDetectionId) return;
-    
-    try {
-        const response = await fetch(`/api/tamper-detection/detections/${currentDetectionId}/review`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                review_status: 'confirmed',
-                review_notes: document.getElementById('reviewNotes').value
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Tamper confirmed', 'success');
-            bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
-            initializeTamperDashboard(); // Refresh data
-        } else {
-            showToast('Review failed: ' + result.error, 'danger');
-        }
-        
-    } catch (error) {
-        showToast('Review request failed', 'danger');
+        const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+        modal.show();
     }
-}
 
-async function markFalsePositive() {
-    if (!currentDetectionId) return;
-    
-    try {
-        const response = await fetch(`/api/tamper-detection/detections/${currentDetectionId}/review`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                review_status: 'false_positive',
-                review_notes: document.getElementById('reviewNotes').value
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Marked as false positive', 'success');
-            bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
-            initializeTamperDashboard(); // Refresh data
-        } else {
-            showToast('Review failed: ' + result.error, 'danger');
+    async function confirmTamper() {
+        if (!currentDetectionId) return;
+
+        try {
+            const response = await fetch(`/api/tamper-detection/detections/${currentDetectionId}/review`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    review_status: 'confirmed',
+                    review_notes: document.getElementById('reviewNotes').value
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Tamper confirmed', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
+                initializeTamperDashboard(); // Refresh data
+            } else {
+                showToast('Review failed: ' + result.error, 'danger');
+            }
+
+        } catch (error) {
+            showToast('Review request failed', 'danger');
         }
-        
-    } catch (error) {
-        showToast('Review request failed', 'danger');
     }
-}
 
-function viewAllDetections() {
-    // Navigate to a detailed detections page (to be implemented)
-    showToast('Feature coming soon', 'info');
-}
+    async function markFalsePositive() {
+        if (!currentDetectionId) return;
 
-function exportSecurityReport() {
-    showToast('Export feature coming soon', 'info');
-}
+        try {
+            const response = await fetch(`/api/tamper-detection/detections/${currentDetectionId}/review`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    review_status: 'false_positive',
+                    review_notes: document.getElementById('reviewNotes').value
+                })
+            });
 
-function openAgentMonitoring() {
-    // Navigate to agent monitoring page (to be implemented)
-    showToast('Agent monitoring feature coming soon', 'info');
-}
+            const result = await response.json();
 
-function showToast(message, type) {
-    // Simple toast notification
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
-    toast.innerHTML = `
+            if (result.success) {
+                showToast('Marked as false positive', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
+                initializeTamperDashboard(); // Refresh data
+            } else {
+                showToast('Review failed: ' + result.error, 'danger');
+            }
+
+        } catch (error) {
+            showToast('Review request failed', 'danger');
+        }
+    }
+
+    function viewAllDetections() {
+        // Navigate to a detailed detections page (to be implemented)
+        showToast('Feature coming soon', 'info');
+    }
+
+    function exportSecurityReport() {
+        showToast('Export feature coming soon', 'info');
+    }
+
+    function openAgentMonitoring() {
+        // Navigate to agent monitoring page (to be implemented)
+        showToast('Agent monitoring feature coming soon', 'info');
+    }
+
+    function showToast(message, type) {
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+        toast.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.remove();
-        }
-    }, 3000);
-}
+        document.body.appendChild(toast);
 
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeTamperDashboard();
-});
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 3000);
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeTamperDashboard();
+    });
 </script>
 
 <style>
-.card {
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-}
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
 
-#recentDetections, #suspiciousSubmissionsList, #agentAlertsList {
-    scrollbar-width: thin;
-}
+    #recentDetections,
+    #suspiciousSubmissionsList,
+    #agentAlertsList {
+        scrollbar-width: thin;
+    }
 
-#recentDetections::-webkit-scrollbar,
-#suspiciousSubmissionsList::-webkit-scrollbar,
-#agentAlertsList::-webkit-scrollbar {
-    width: 6px;
-}
+    #recentDetections::-webkit-scrollbar,
+    #suspiciousSubmissionsList::-webkit-scrollbar,
+    #agentAlertsList::-webkit-scrollbar {
+        width: 6px;
+    }
 
-#recentDetections::-webkit-scrollbar-thumb,
-#suspiciousSubmissionsList::-webkit-scrollbar-thumb,
-#agentAlertsList::-webkit-scrollbar-thumb {
-    background-color: #dee2e6;
-    border-radius: 3px;
-}
+    #recentDetections::-webkit-scrollbar-thumb,
+    #suspiciousSubmissionsList::-webkit-scrollbar-thumb,
+    #agentAlertsList::-webkit-scrollbar-thumb {
+        background-color: #dee2e6;
+        border-radius: 3px;
+    }
 </style>
 {% endblock %}

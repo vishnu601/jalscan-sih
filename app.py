@@ -647,8 +647,15 @@ def create_app(config_name='default'):
             # Execute query
             submissions_by_date = query.group_by(db.func.date(WaterLevelSubmission.timestamp)).order_by('date').all()
             
-            labels = [row.date.strftime('%Y-%m-%d') for row in submissions_by_date]
-            data = [row.count for row in submissions_by_date]
+            # Handle dates that may be strings (SQLite) or date objects
+            labels = []
+            data = []
+            for row in submissions_by_date:
+                if hasattr(row.date, 'strftime'):
+                    labels.append(row.date.strftime('%Y-%m-%d'))
+                else:
+                    labels.append(str(row.date))
+                data.append(row.count)
             
             return jsonify({
                 'labels': labels,
@@ -681,21 +688,32 @@ def create_app(config_name='default'):
                 MonitoringSite.name
             ).order_by('date').all()
             
+            # Handle dates that may be strings (SQLite) or date objects
+            def format_date(d):
+                if hasattr(d, 'strftime'):
+                    return d.strftime('%Y-%m-%d')
+                return str(d)
+            
             # Format data for chart
             sites = list(set([row.site_name for row in trends_data]))
-            dates = sorted(list(set([row.date.strftime('%Y-%m-%d') for row in trends_data])))
+            dates = sorted(list(set([format_date(row.date) for row in trends_data])))
             
             datasets = []
-            for site in sites:  # Show all sites
+            for site in sites:
                 site_data = []
                 for date in dates:
-                    matching_row = next((row for row in trends_data if row.site_name == site and row.date.strftime('%Y-%m-%d') == date), None)
-                    site_data.append(matching_row.avg_level if matching_row else 0)
+                    matching_row = next((row for row in trends_data if row.site_name == site and format_date(row.date) == date), None)
+                    site_data.append(round(matching_row.avg_level, 2) if matching_row else 0)
                 
+                # Generate colors based on site name hash
+                h = hash(site)
                 datasets.append({
                     'label': site,
                     'data': site_data,
-                    'borderColor': f'rgba({hash(site) % 255}, {hash(site + "1") % 255}, {hash(site + "2") % 255}, 1)'
+                    'borderColor': f'rgba({(h * 37) % 200 + 55}, {(h * 67) % 200 + 55}, {(h * 97) % 200 + 55}, 1)',
+                    'backgroundColor': f'rgba({(h * 37) % 200 + 55}, {(h * 67) % 200 + 55}, {(h * 97) % 200 + 55}, 0.2)',
+                    'fill': True,
+                    'tension': 0.3
                 })
             
             return jsonify({
@@ -706,6 +724,34 @@ def create_app(config_name='default'):
             logging.error(f"Error in water-level-trends: {e}")
             return jsonify({'labels': [], 'datasets': []})
 
+    @app.route('/api/analytics/submissions-by-site')
+    @login_required
+    @role_required(['central_analyst', 'supervisor', 'admin'])
+    def submissions_by_site():
+        """API for submissions by site (pie chart)"""
+        try:
+            site_counts = db.session.query(
+                MonitoringSite.name,
+                db.func.count(WaterLevelSubmission.id).label('count')
+            ).join(WaterLevelSubmission).group_by(MonitoringSite.id).order_by(db.desc('count')).all()
+            
+            labels = [site.name for site in site_counts]
+            data = [site.count for site in site_counts]
+            
+            # Generate colors for each site
+            colors = []
+            for i, site in enumerate(site_counts):
+                h = hash(site.name)
+                colors.append(f'rgba({(h * 37) % 200 + 55}, {(h * 67) % 200 + 55}, {(h * 97) % 200 + 55}, 0.8)')
+            
+            return jsonify({
+                'labels': labels,
+                'data': data,
+                'backgroundColor': colors
+            })
+        except Exception as e:
+            logging.error(f"Error in submissions-by-site: {e}")
+            return jsonify({'labels': [], 'data': [], 'backgroundColor': []})
     @app.route('/api/analytics/user-activity')
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
@@ -715,7 +761,7 @@ def create_app(config_name='default'):
             user_stats = db.session.query(
                 User.username,
                 db.func.count(WaterLevelSubmission.id).label('submission_count')
-            ).join(WaterLevelSubmission).group_by(User.id).order_by(db.desc('submission_count')).limit(10).all()
+            ).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id).group_by(User.id).order_by(db.desc('submission_count')).limit(10).all()
             
             labels = [user.username for user in user_stats]
             data = [user.submission_count for user in user_stats]
@@ -2152,6 +2198,79 @@ def create_app(config_name='default'):
             logging.error(f"Error reviewing tamper detection: {e}")
             return jsonify({'success': False, 'error': str(e)})
 
+    @app.route('/api/tamper-detection/trends')
+    @login_required
+    @role_required(['supervisor', 'admin', 'central_analyst'])
+    def tamper_detection_trends():
+        """API for tamper detection trends over time"""
+        try:
+            days = request.args.get('days', 30, type=int)
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=days)
+            
+            # Get detections by date
+            detections_by_date = db.session.query(
+                db.func.date(TamperDetection.detected_at).label('date'),
+                db.func.count(TamperDetection.id).label('count')
+            ).filter(
+                TamperDetection.detected_at >= start_date
+            ).group_by(
+                db.func.date(TamperDetection.detected_at)
+            ).order_by('date').all()
+            
+            # Get tamper scores by date
+            scores_by_date = db.session.query(
+                db.func.date(WaterLevelSubmission.timestamp).label('date'),
+                db.func.avg(WaterLevelSubmission.tamper_score).label('avg_score'),
+                db.func.max(WaterLevelSubmission.tamper_score).label('max_score'),
+                db.func.count(WaterLevelSubmission.id).label('count')
+            ).filter(
+                WaterLevelSubmission.timestamp >= start_date
+            ).group_by(
+                db.func.date(WaterLevelSubmission.timestamp)
+            ).order_by('date').all()
+            
+            # Get detections by type
+            detections_by_type = db.session.query(
+                TamperDetection.detection_type,
+                db.func.count(TamperDetection.id).label('count')
+            ).filter(
+                TamperDetection.detected_at >= start_date
+            ).group_by(TamperDetection.detection_type).all()
+            
+            # Get detections by severity
+            detections_by_severity = db.session.query(
+                TamperDetection.severity,
+                db.func.count(TamperDetection.id).label('count')
+            ).filter(
+                TamperDetection.detected_at >= start_date
+            ).group_by(TamperDetection.severity).all()
+            
+            return jsonify({
+                'trends': {
+                    'labels': [str(d.date) for d in detections_by_date],
+                    'detections': [d.count for d in detections_by_date]
+                },
+                'scores': {
+                    'labels': [str(s.date) for s in scores_by_date],
+                    'avg_scores': [round(s.avg_score or 0, 3) for s in scores_by_date],
+                    'max_scores': [round(s.max_score or 0, 3) for s in scores_by_date],
+                    'submission_counts': [s.count for s in scores_by_date]
+                },
+                'by_type': {
+                    'labels': [t.detection_type or 'Unknown' for t in detections_by_type],
+                    'data': [t.count for t in detections_by_type]
+                },
+                'by_severity': {
+                    'labels': [s.severity or 'Unknown' for s in detections_by_severity],
+                    'data': [s.count for s in detections_by_severity]
+                }
+            })
+            
+        except Exception as e:
+            logging.error(f"Error in tamper detection trends: {e}")
+            return jsonify({'error': str(e)})
+
     @app.route('/api/delete-submission/<int:submission_id>', methods=['DELETE', 'POST'])
     @login_required
     def delete_submission(submission_id):
@@ -2434,11 +2553,304 @@ def create_app(config_name='default'):
             initialize_background_services()
             app.background_services_initialized = True
     
+    # === EXTERNAL AI CALL DATA SYNC ===
+    EXTERNAL_AI_CALL_API = "https://c0f5a079-6ee5-4602-80b4-b59d257051a2-00-3tsezt6p1ufiy.sisko.replit.dev/data/json"
+    last_sync_count = {'value': 0}  # Track last synced record count
+    
+    def sync_external_voice_data():
+        """Fetch and sync voice submission data from external AI call agent"""
+        try:
+            response = requests.get(EXTERNAL_AI_CALL_API, timeout=10)
+            if response.status_code != 200:
+                logging.error(f"Failed to fetch external AI call data: {response.status_code}")
+                return {'synced': 0, 'error': 'Failed to fetch data'}
+            
+            data = response.json()
+            records = data.get('records', [])
+            synced_count = 0
+            
+            for record in records:
+                # Extract data from record
+                date_str = record.get('Date', '')
+                time_str = record.get('Time', '')
+                river_name = record.get('River Name', '').strip()
+                river_id = record.get('River ID', '')
+                water_level_str = record.get('Water Level', '0')
+                ai_status = record.get('AI Status', 'Voice')
+                
+                # Parse water level (handle formats like "5 m" or "5 to 6 m")
+                import re
+                numbers = re.findall(r'[\d.]+', water_level_str)
+                water_level = float(numbers[0]) if numbers else 0.0
+                
+                # Parse timestamp
+                try:
+                    timestamp = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+                except:
+                    timestamp = datetime.utcnow()
+                
+                # Check if already exists (by timestamp and river name)
+                existing = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.timestamp == timestamp,
+                    WaterLevelSubmission.submission_method == 'voice_call'
+                ).first()
+                
+                if existing:
+                    continue  # Skip duplicates
+                
+                # Find or create site
+                site = MonitoringSite.query.filter(
+                    MonitoringSite.name.ilike(f'%{river_name}%')
+                ).first()
+                
+                if not site and river_name:
+                    site = MonitoringSite(
+                        name=river_name.title(),
+                        river_code=river_id,
+                        latitude=0.0,
+                        longitude=0.0,
+                        is_active=True
+                    )
+                    db.session.add(site)
+                    db.session.commit()
+                
+                if site:
+                    # Create submission
+                    submission = WaterLevelSubmission(
+                        site_id=site.id,
+                        user_id=1,  # Default admin user
+                        water_level=water_level,
+                        timestamp=timestamp,
+                        gps_latitude=site.latitude or 0.0,
+                        gps_longitude=site.longitude or 0.0,
+                        photo_filename='voice_external.jpg',
+                        submission_method='voice_call',
+                        sync_status='synced',
+                        notes=f"External voice submission. AI: {ai_status}. River ID: {river_id}"
+                    )
+                    db.session.add(submission)
+                    synced_count += 1
+            
+            if synced_count > 0:
+                db.session.commit()
+                logging.info(f"Synced {synced_count} new voice submissions from external API")
+            
+            return {'synced': synced_count, 'total': len(records)}
+            
+        except Exception as e:
+            logging.error(f"Error syncing external voice data: {e}")
+            return {'synced': 0, 'error': str(e)}
+    
+    @app.route('/api/voice/sync', methods=['POST'])
+    @login_required
+    def api_sync_voice_data():
+        """API endpoint to manually trigger voice data sync"""
+        result = sync_external_voice_data()
+        return jsonify(result)
+    
     @app.route('/ai-call-reporting')
     @login_required
     def ai_call_reporting():
         """AI Call Reporting Dashboard"""
-        return render_template('ai_call_reporting.html')
+        # Auto-sync on page load
+        sync_result = sync_external_voice_data()
+        
+        # Get voice submissions
+        voice_submissions = WaterLevelSubmission.query.filter_by(
+            submission_method='voice_call'
+        ).order_by(WaterLevelSubmission.timestamp.desc()).limit(20).all()
+        return render_template('ai_call_reporting.html', 
+                               voice_submissions=voice_submissions,
+                               sync_result=sync_result)
+    
+    # === TWILIO VOICE CALL ROUTES ===
+    # Store call context in memory (phone -> data mapping)
+    voice_call_context = {}
+    
+    def speak_response(response, text):
+        """Helper to add speech to Twilio response"""
+        response.say(text, voice='Polly.Joanna-Neural')
+    
+    @app.route('/voice/initiate', methods=['POST'])
+    @login_required
+    def voice_initiate_call():
+        """Initiate an outbound call to a phone number"""
+        from twilio.rest import Client
+        
+        data = request.json
+        to_number = data.get('phone_number', '').strip()
+        ai_data = data.get('ai_data')  # Optional AI verification data
+        
+        if not to_number:
+            return jsonify({"status": "error", "message": "Phone number required"}), 400
+        
+        # Store AI context if provided
+        if ai_data:
+            voice_call_context[to_number] = ai_data
+        
+        account_sid = os.environ.get('VOICE_TWILIO_ACCOUNT_SID')
+        auth_token = os.environ.get('VOICE_TWILIO_AUTH_TOKEN')
+        from_number = os.environ.get('VOICE_TWILIO_PHONE_NUMBER')
+        
+        if not all([account_sid, auth_token, from_number]):
+            return jsonify({"status": "error", "message": "Voice Twilio credentials not configured. Set VOICE_TWILIO_ACCOUNT_SID, VOICE_TWILIO_AUTH_TOKEN, VOICE_TWILIO_PHONE_NUMBER in .env"}), 500
+        
+        try:
+            client = Client(account_sid, auth_token)
+            callback_url = url_for('voice_webhook', _external=True)
+            call = client.calls.create(to=to_number, from_=from_number, url=callback_url)
+            return jsonify({"status": "success", "message": "Call initiated", "sid": call.sid})
+        except Exception as e:
+            logging.error(f"Twilio call error: {e}")
+            return jsonify({"status": "error", "message": str(e)}), 500
+    
+    @app.route('/voice/webhook', methods=['GET', 'POST'])
+    def voice_webhook():
+        """Handle incoming Twilio voice webhook - start of call"""
+        from twilio.twiml.voice_response import VoiceResponse, Gather
+        from flask import session
+        
+        resp = VoiceResponse()
+        session['voice_step'] = 'welcome'
+        
+        user_number = request.values.get('To') or request.values.get('From')
+        context = voice_call_context.get(user_number)
+        
+        # If we have AI verification context, use vision-assisted flow
+        if context:
+            status = context.get('status', 'Unknown')
+            confidence = context.get('confidence', 0)
+            level = context.get('level', 'Unknown')
+            
+            session['ai_verified'] = f"{status} ({confidence}%)"
+            session['voice_role'] = 'field_agent'
+            
+            if "Tampered" in status or int(confidence) < 70:
+                speak_response(resp, f"Security Alert. JalScan AI detected tampering with only {confidence} percent confidence. Access Denied.")
+                resp.hangup()
+                return str(resp)
+            else:
+                speak_response(resp, f"Hello Field Agent. Image verified. Gemini estimates water level is {level}. Please confirm the Site Name.")
+                session['voice_step'] = 'ask_site_name'
+                gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+                resp.append(gather)
+                return str(resp)
+        
+        # Standard welcome flow
+        speak_response(resp, "Welcome to JalScan Voice Reporting System.")
+        gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+        speak_response(gather, "Would you like to log in as a Field Agent, or Report Water Level directly?")
+        resp.append(gather)
+        resp.redirect('/voice/webhook')
+        return str(resp)
+    
+    @app.route('/voice/input', methods=['GET', 'POST'])
+    def voice_input():
+        """Handle speech recognition input during call"""
+        from twilio.twiml.voice_response import VoiceResponse, Gather
+        from flask import session
+        import re
+        
+        resp = VoiceResponse()
+        user_input = request.values.get('SpeechResult', '').lower()
+        step = session.get('voice_step', 'welcome')
+        
+        # Welcome Menu
+        if step == 'welcome':
+            if 'agent' in user_input or 'field' in user_input:
+                session['voice_role'] = 'field_agent'
+                session['voice_step'] = 'ask_site_name'
+                gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+                speak_response(gather, "Please tell me the monitoring site name.")
+                resp.append(gather)
+            elif 'report' in user_input or 'water' in user_input or 'level' in user_input:
+                session['voice_step'] = 'ask_site_name'
+                gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+                speak_response(gather, "Please tell me the site name for your water level report.")
+                resp.append(gather)
+            else:
+                speak_response(resp, "I didn't understand. Say Field Agent or Report Water Level.")
+                resp.redirect('/voice/webhook')
+        
+        # Ask Site Name
+        elif step == 'ask_site_name':
+            session['voice_site_name'] = user_input
+            session['voice_step'] = 'ask_water_level'
+            gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+            speak_response(gather, f"Got it, site {user_input}. What is the current water level in meters?")
+            resp.append(gather)
+        
+        # Ask Water Level
+        elif step == 'ask_water_level':
+            # Extract numbers from speech
+            numbers = re.findall(r'[\d.]+', user_input)
+            water_level = float(numbers[0]) if numbers else 0.0
+            session['voice_water_level'] = water_level
+            session['voice_step'] = 'confirm_report'
+            
+            gather = Gather(input='speech', action='/voice/input', speechTimeout='auto')
+            speak_response(gather, f"You reported {water_level} meters at site {session.get('voice_site_name')}. Say Confirm to submit or Cancel to start over.")
+            resp.append(gather)
+        
+        # Confirm Report
+        elif step == 'confirm_report':
+            if 'confirm' in user_input or 'yes' in user_input:
+                # Save to database
+                site_name = session.get('voice_site_name', '')
+                water_level = session.get('voice_water_level', 0.0)
+                ai_verified = session.get('ai_verified', 'Voice Only')
+                
+                # Find or create site
+                site = MonitoringSite.query.filter(
+                    MonitoringSite.name.ilike(f'%{site_name}%')
+                ).first()
+                
+                if not site:
+                    # Create a basic site entry
+                    site = MonitoringSite(
+                        name=site_name.title(),
+                        latitude=0.0,
+                        longitude=0.0,
+                        is_active=True
+                    )
+                    db.session.add(site)
+                    db.session.commit()
+                
+                # Create submission
+                submission = WaterLevelSubmission(
+                    site_id=site.id,
+                    user_id=1,  # Default to admin user for voice calls
+                    water_level=water_level,
+                    gps_latitude=site.latitude or 0.0,
+                    gps_longitude=site.longitude or 0.0,
+                    photo_filename='voice_submission.jpg',  # Placeholder for voice calls
+                    submission_method='voice_call',
+                    sync_status='synced',
+                    notes=f"Voice submission. AI: {ai_verified}"
+                )
+                db.session.add(submission)
+                db.session.commit()
+                
+                speak_response(resp, f"Report saved successfully. Water level {water_level} meters at {site_name}. Thank you for using JalScan.")
+                resp.hangup()
+            else:
+                session['voice_step'] = 'welcome'
+                speak_response(resp, "Cancelled. Let's start over.")
+                resp.redirect('/voice/webhook')
+        
+        else:
+            speak_response(resp, "I didn't understand. Please try again.")
+            resp.redirect('/voice/webhook')
+        
+        return str(resp)
+    
+    @app.route('/voice/status', methods=['POST'])
+    def voice_call_status():
+        """Callback for call status updates"""
+        call_sid = request.values.get('CallSid')
+        call_status = request.values.get('CallStatus')
+        logging.info(f"Call {call_sid} status: {call_status}")
+        return '', 200
     
     @app.errorhandler(404)
     def not_found_error(error):

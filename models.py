@@ -333,6 +333,7 @@ class WaterLevelSubmission(db.Model):
     sync_error = db.Column(db.Text)
     notes = db.Column(db.Text)
     quality_rating = db.Column(db.Integer)
+    submission_method = db.Column(db.String(20), default='web')  # web, voice_call, whatsapp
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime)
     review_notes = db.Column(db.Text)

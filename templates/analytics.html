@@ -78,7 +78,7 @@
         <!-- Submissions Over Time -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Submissions Over Time</h5>
+                <h5 class="card-title mb-0">📊 Submissions Over Time</h5>
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-secondary" onclick="downloadChart('submissionsChart')">
                         <i class="bi bi-download"></i> Save Chart
@@ -92,6 +92,45 @@
                             <span class="visually-hidden">Loading chart...</span>
                         </div>
                         <p class="mt-2">Loading submissions data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Water Level Trends -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">📈 Water Level Trends</h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="downloadChart('waterLevelChart')">
+                        <i class="bi bi-download"></i> Save Chart
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="waterLevelChart" style="height: 300px;">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-info" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading water level trends...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Activity Chart -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">👥 Top Contributors</h5>
+            </div>
+            <div class="card-body">
+                <div id="userActivityChart" style="height: 250px;">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading user activity...</p>
                     </div>
                 </div>
             </div>
@@ -159,6 +198,22 @@
 
     <!-- Sidebar -->
     <div class="col-lg-4">
+        <!-- Submissions by Site (Pie Chart) -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">🥧 Submissions by Site</h5>
+            </div>
+            <div class="card-body">
+                <div id="submissionsBySiteChart" style="height: 250px;">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Recent Submissions -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -247,10 +302,16 @@
     // Chart instances
     let submissionsChart = null;
     let qualityChart = null;
+    let waterLevelChart = null;
+    let userActivityChart = null;
+    let submissionsBySiteChart = null;
 
     // Load all charts
     async function loadAllCharts() {
         await loadSubmissionsChart();
+        await loadWaterLevelChart();
+        await loadUserActivityChart();
+        await loadSubmissionsBySiteChart();
         await loadQualityChart();
     }
 
@@ -382,6 +443,129 @@
             '<div class="alert alert-warning">Quality data not available</div>';
     }
 }
+
+
+    // Load Water Level Trends Chart
+    async function loadWaterLevelChart() {
+        try {
+            const response = await fetch("/api/analytics/water-level-trends");
+            const data = await response.json();
+            
+            if (!data.labels || data.labels.length === 0) {
+                document.getElementById("waterLevelChart").innerHTML = 
+                    '<div class="alert alert-info text-center">No water level data available.</div>';
+                return;
+            }
+            
+            const ctx = document.createElement("canvas");
+            document.getElementById("waterLevelChart").innerHTML = "";
+            document.getElementById("waterLevelChart").appendChild(ctx);
+            
+            waterLevelChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: data.labels,
+                    datasets: data.datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: "bottom" }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: { display: true, text: "Water Level (m)" }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("Error loading water level chart:", error);
+            document.getElementById("waterLevelChart").innerHTML = '<div class="alert alert-warning">Error loading water level data</div>';
+        }
+    }
+
+    // Load User Activity Chart
+    async function loadUserActivityChart() {
+        try {
+            const response = await fetch("/api/analytics/user-activity");
+            const data = await response.json();
+            
+            if (!data.labels || data.labels.length === 0) {
+                document.getElementById("userActivityChart").innerHTML = 
+                    '<div class="alert alert-info text-center">No user activity data available.</div>';
+                return;
+            }
+            
+            const ctx = document.createElement("canvas");
+            document.getElementById("userActivityChart").innerHTML = "";
+            document.getElementById("userActivityChart").appendChild(ctx);
+            
+            userActivityChart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: "Submissions",
+                        data: data.data,
+                        backgroundColor: "rgba(40, 167, 69, 0.8)",
+                        borderColor: "rgba(40, 167, 69, 1)",
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: "y",
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        } catch (error) {
+            console.error("Error loading user activity chart:", error);
+            document.getElementById("userActivityChart").innerHTML = '<div class="alert alert-warning">Error loading user activity</div>';
+        }
+    }
+
+    // Load Submissions by Site Chart (Pie)
+    async function loadSubmissionsBySiteChart() {
+        try {
+            const response = await fetch("/api/analytics/submissions-by-site");
+            const data = await response.json();
+            
+            if (!data.labels || data.labels.length === 0) {
+                document.getElementById("submissionsBySiteChart").innerHTML = 
+                    '<div class="alert alert-info text-center">No site data available.</div>';
+                return;
+            }
+            
+            const ctx = document.createElement("canvas");
+            document.getElementById("submissionsBySiteChart").innerHTML = "";
+            document.getElementById("submissionsBySiteChart").appendChild(ctx);
+            
+            submissionsBySiteChart = new Chart(ctx, {
+                type: "doughnut",
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        data: data.data,
+                        backgroundColor: data.backgroundColor
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: "bottom", labels: { boxWidth: 12 } }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("Error loading submissions by site chart:", error);
+            document.getElementById("submissionsBySiteChart").innerHTML = '<div class="alert alert-warning">Error loading site data</div>';
+        }
+    }
 
     // Export data function
     async function exportData(format) {

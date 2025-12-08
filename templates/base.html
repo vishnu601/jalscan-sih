@@ -107,12 +107,7 @@
                         <i class="bi bi-qr-code"></i> QR Generator
                     </a>
 
-                    <!-- AI Agents Link (Admin/Supervisor/Analyst only) -->
-                    {% if current_user.role in ['admin', 'supervisor', 'central_analyst'] %}
-                    <a class="nav-link" href="{{ url_for('admin_ai_agents') }}">
-                        <i class="bi bi-robot"></i> AI Agents
-                    </a>
-                    {% endif %}
+
 
                     {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
                     <a class="nav-link" href="{{ url_for('cloud_dashboard') }}">
@@ -186,13 +181,7 @@
                     <small>Capture</small>
                 </a>
 
-                <!-- AI Agents Mobile Link -->
-                {% if current_user.role in ['admin', 'supervisor', 'central_analyst'] %}
-                <a class="nav-link text-center text-white" href="{{ url_for('admin_ai_agents') }}">
-                    <i class="bi bi-robot d-block"></i>
-                    <small>AI Agents</small>
-                </a>
-                {% endif %}
+
 
                 <a class="nav-link text-center text-white" href="{{ url_for('submissions') }}">
                     <i class="bi bi-list-check d-block"></i>
