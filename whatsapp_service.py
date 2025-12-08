@@ -5,6 +5,7 @@ from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 from models import db, WhatsAppSubscriber, MonitoringSite, FloodAlert, WaterLevelSubmission
 from utils.geofence import calculate_distance
+from utils.weather import get_rainfall_prediction
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -216,4 +217,62 @@ class WhatsAppService:
         db.session.commit()
         logger.info(f"Manual alert sent to {count} subscribers for site {site.name}")
         return count
+
+    def check_forecast_and_alert(self, site):
+        """Check weather forecast and send alert if flood risk is high"""
+        try:
+            prediction = get_rainfall_prediction(site.latitude, site.longitude)
+            if not prediction:
+                return False
+                
+            predicted_rise = prediction['predicted_rise_m']
+            rainfall = prediction['rainfall_mm']
+            
+            # Retrieve the latest water level reading for current context
+            latest_submission = WaterLevelSubmission.query.filter_by(site_id=site.id)\
+                .order_by(WaterLevelSubmission.timestamp.desc()).first()
+            current_level = latest_submission.water_level if latest_submission else 0.0
+            
+            # Calculate potential level
+            potential_level = current_level + predicted_rise
+            
+            threshold = site.flood_threshold or 5.0 # default threshold if not set
+            
+            if potential_level >= threshold:
+                logger.info(f"Forecast Alert: Site {site.name} predicted to reach {potential_level}m (Threshold: {threshold}m)")
+                
+                message = (f"⚠️ FLOOD WARNING: Heavy rainfall ({rainfall}mm) predicted near {site.name}. "
+                           f"Water level may rise by {predicted_rise}m in next 2 hours, potentially reaching {potential_level}m. "
+                           f"Please stay alert.")
+                
+                # Create alert record
+                alert = FloodAlert(
+                    site_id=site.id,
+                    alert_level='FORECAST',
+                    water_level=current_level,
+                    message=message
+                )
+                db.session.add(alert)
+                
+                # Send to subscribers
+                alert_radius_km = 10
+                alert_radius_meters = alert_radius_km * 1000
+                subscribers = WhatsAppSubscriber.query.filter_by(is_active=True).all()
+                count = 0
+                
+                for sub in subscribers:
+                    if sub.latitude and sub.longitude:
+                        dist = calculate_distance(sub.latitude, sub.longitude, site.latitude, site.longitude)
+                        if dist <= alert_radius_meters:
+                            if self.send_message(sub.phone_number, alert.message):
+                                count += 1
+                                
+                alert.subscribers_notified_count = count
+                db.session.commit()
+                return True
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking forecast for site {site.name}: {e}")
+            return False
 

@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h2><i class="bi bi-map me-2"></i>Weather & Flood Risk Map</h2>
+        <p class="text-muted">Real-time weather forecast and flood risk heatmap.</p>
+    </div>
+    <div class="col-md-6 text-md-end">
+        <button id="checkAlertsBtn" class="btn btn-warning" onclick="checkWeatherAlerts()">
+            <i class="bi bi-bell-fill me-1"></i> Check Alerts
+        </button>
+        <button class="btn btn-outline-primary ms-2" onclick="refreshMap()">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+        <div id="weatherMap" style="height: 500px; width: 100%;"></div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0"><i class="bi bi-list-ul me-2"></i>Site Weather Reports</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Site Name</th>
+                        <th>Coordinates</th>
+                        <th>Rainfall (2h)</th>
+                        <th>Predicted Rise</th>
+                        <th>Condition</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="siteListBody">
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">Loading weather data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Leaflet Heat -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+<script>
+    let map;
+    let heatLayer;
+    let markers = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initMap();
+        loadHeatmapData();
+    });
+
+    function initMap() {
+        // Default center (India)
+        map = L.map('weatherMap').setView([20.5937, 78.9629], 5);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+    }
+
+    async function loadHeatmapData() {
+        try {
+            const response = await fetch('/api/weather/heatmap');
+            const data = await response.json();
+
+            // Render table list
+            renderSiteList(data);
+
+            // Clear existing layers
+            if (heatLayer) map.removeLayer(heatLayer);
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            const heatPoints = [];
+            const bounds = [];
+
+            data.forEach(site => {
+                // Add marker
+                const markerColor = getMarkerColor(site.risk_level);
+                const markerHtml = `<div style="background-color: ${markerColor}; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white;"></div>`;
+
+                const icon = L.divIcon({
+                    className: 'custom-marker',
+                    html: markerHtml,
+                    iconSize: [20, 20]
+                });
+
+                const marker = L.marker([site.lat, site.lng], { icon: icon })
+                    .bindPopup(`
+                        <strong>${site.name}</strong><br>
+                        Rainfall (2h): ${site.rainfall}mm<br>
+                        Predicted Rise: ${site.predicted_rise}m<br>
+                        Risk Level: ${site.risk_level.toUpperCase()}
+                    `)
+                    .addTo(map);
+
+                markers.push(marker);
+                bounds.push([site.lat, site.lng]);
+
+                // Add to heatmap (intensity based on rainfall)
+                // Normalize rainfall 0-50mm to 0-1 range roughly
+                let intensity = site.rainfall / 50.0;
+                if (intensity > 1) intensity = 1;
+
+                // Only add heat point if there is rainfall
+                if (site.rainfall > 0) {
+                    heatPoints.push([site.lat, site.lng, intensity]);
+                }
+            });
+
+            // Add heat layer
+            if (heatPoints.length > 0) {
+                heatLayer = L.heatLayer(heatPoints, { radius: 40, blur: 25, maxZoom: 10 }).addTo(map);
+            }
+
+            // Fit bounds if sites exist
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+        } catch (error) {
+            console.error('Error loading heatmap data:', error);
+            document.getElementById('siteListBody').innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Failed to load weather data</td></tr>`;
+            alert('Failed to load weather data');
+        }
+    }
+
+    function renderSiteList(sites) {
+        const tbody = document.getElementById('siteListBody');
+        if (sites.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No sites found</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        sites.forEach(site => {
+            const condition = getWeatherCondition(site.rainfall);
+            const statusBadge = getStatusBadge(site.risk_level);
+
+            html += `
+                <tr>
+                    <td><strong>${site.name}</strong></td>
+                    <td><small class="text-muted">${site.lat.toFixed(4)}, ${site.lng.toFixed(4)}</small></td>
+                    <td>${site.rainfall} mm</td>
+                    <td>${site.predicted_rise} m</td>
+                    <td>${condition}</td>
+                    <td>${statusBadge}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function getWeatherCondition(rainfall) {
+        if (rainfall <= 0.5) return '<span class="badge bg-light text-dark"><i class="bi bi-sun"></i> Clear/Cloudy</span>';
+        if (rainfall <= 2.5) return '<span class="badge bg-info text-dark"><i class="bi bi-cloud-drizzle"></i> Light Rain</span>';
+        if (rainfall <= 10) return '<span class="badge bg-primary"><i class="bi bi-cloud-rain"></i> Moderate Rain</span>';
+        if (rainfall <= 50) return '<span class="badge bg-primary"><i class="bi bi-cloud-lightning-rain"></i> Heavy Rain</span>';
+        return '<span class="badge bg-danger"><i class="bi bi-cloud-lightning-rain-fill"></i> Severe Storm</span>';
+    }
+
+    function getStatusBadge(level) {
+        switch (level) {
+            case 'critical': return '<span class="badge bg-danger">Critical Risk</span>';
+            case 'high': return '<span class="badge bg-warning text-dark">High Risk</span>';
+            case 'medium': return '<span class="badge bg-info text-dark">Medium Risk</span>';
+            default: return '<span class="badge bg-success">Safe</span>';
+        }
+    }
+
+    function getMarkerColor(level) {
+        switch (level) {
+            case 'critical': return '#dc3545'; // Red
+            case 'high': return '#fd7e14'; // Orange
+            case 'medium': return '#ffc107'; // Yellow
+            default: return '#28a745'; // Green
+        }
+    }
+
+    async function checkWeatherAlerts() {
+        const btn = document.getElementById('checkAlertsBtn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Checking...';
+
+        try {
+            const response = await fetch('/api/weather/check-alerts', { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                if (result.alerts_sent > 0) {
+                    alert(`Alert check complete. ${result.alerts_sent} alerts triggered!`);
+                } else {
+                    alert('Alert check complete. No critical risks found.');
+                }
+            }
+        } catch (error) {
+            console.error('Error checking alerts:', error);
+            alert('Failed to check alerts');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    function refreshMap() {
+        loadHeatmapData();
+    }
+</script>
+{% endblock %}

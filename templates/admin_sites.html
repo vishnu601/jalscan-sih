@@ -19,6 +19,9 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Site Management</h2>
             <div>
+                <a href="{{ url_for('qr_generator') }}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-qr-code"></i> QR Generator
+                </a>
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSiteModal"
                     onclick="initMap()">
                     <i class="bi bi-plus-lg"></i> Add New Site
@@ -102,6 +105,10 @@
                                             data-bs-toggle="tooltip" title="Send Manual Alert">
                                             <i class="bi bi-exclamation-triangle"></i>
                                         </button>
+                                        <button class="btn btn-outline-info" onclick="predictFlood({{ site.id }})"
+                                            data-bs-toggle="tooltip" title="Predict Flood Risk">
+                                            <i class="bi bi-cloud-lightning-rain"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -120,6 +127,56 @@
                     </button>
                 </div>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- Prediction Result Modal -->
+        <div class="modal fade" id="predictionModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title"><i class="bi bi-cloud-lightning-rain me-2"></i>Flood Risk Prediction
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div id="predictionLoading" class="py-4">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Fetching rainfall data...</p>
+                        </div>
+                        <div id="predictionContent" class="d-none">
+                            <h4 id="predSiteName" class="mb-3"></h4>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="p-3 border rounded bg-light">
+                                        <small class="text-muted d-block mb-1">Forecast (2h)</small>
+                                        <h3 class="text-primary mb-0"><span id="predRainfall">0</span> mm</h3>
+                                        <small class="text-muted">Rainfall</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-3 border rounded bg-light">
+                                        <small class="text-muted d-block mb-1">Predicted Rise</small>
+                                        <h3 class="text-danger mb-0"><span id="predRise">0</span> m</h3>
+                                        <small class="text-muted">Water Level</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="alert alert-warning mt-3 mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Prediction based on heuristic: 10mm rain ≈ 1m rise
+                            </div>
+                        </div>
+                        <div id="predictionError" class="d-none alert alert-danger mt-3">
+                            Could not fetch prediction data.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -375,6 +432,41 @@
             btn.innerHTML = originalText;
         }
     });
+
+    // Flood Prediction Function
+    async function predictFlood(siteId) {
+        const modal = new bootstrap.Modal(document.getElementById('predictionModal'));
+        const loadingDiv = document.getElementById('predictionLoading');
+        const contentDiv = document.getElementById('predictionContent');
+        const errorDiv = document.getElementById('predictionError');
+
+        // Reset modal state
+        modal.show();
+        loadingDiv.classList.remove('d-none');
+        contentDiv.classList.add('d-none');
+        errorDiv.classList.add('d-none');
+
+        try {
+            const response = await fetch(`/api/predict-flood/${siteId}`);
+            const data = await response.json();
+
+            loadingDiv.classList.add('d-none');
+
+            if (data.success) {
+                document.getElementById('predSiteName').textContent = data.site_name;
+                document.getElementById('predRainfall').textContent = data.prediction.rainfall_mm;
+                document.getElementById('predRise').textContent = data.prediction.predicted_rise_m;
+                contentDiv.classList.remove('d-none');
+            } else {
+                errorDiv.textContent = data.error || 'Prediction failed';
+                errorDiv.classList.remove('d-none');
+            }
+        } catch (error) {
+            loadingDiv.classList.add('d-none');
+            errorDiv.textContent = 'Network error: ' + error.message;
+            errorDiv.classList.remove('d-none');
+        }
+    }
 
     function showAlert(message, type) {
         const alertDiv = document.createElement('div');

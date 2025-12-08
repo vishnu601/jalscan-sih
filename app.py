@@ -11,7 +11,11 @@ from datetime import datetime, timedelta
 import logging
 from flask import current_app
 from sync_service import SyncService
+from utils.geofence import calculate_distance
+from utils.weather import get_rainfall_prediction
 from whatsapp_service import WhatsAppService
+
+
 from functools import wraps
 from tamper_detection import TamperDetectionEngine, monitor_agent_behavior
 from werkzeug.security import generate_password_hash
@@ -1548,6 +1552,8 @@ def create_app(config_name='default'):
             filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             photo.save(filepath)
             
+            ai_result = None
+
             # Add timestamp and location overlay
             try:
                 from utils.image_processing import add_timestamp_to_image, analyze_water_gauge
@@ -1567,8 +1573,28 @@ def create_app(config_name='default'):
                     
             except Exception as e:
                 logging.error(f"Error in image processing: {e}")
-                # Continue even if timestamp overlay fails
             
+            # Calculate Quality Score
+            try:
+                from utils.quality import calculate_quality_score
+                
+                submission_data = {
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'water_level': water_level,
+                    'photo_path': filepath
+                }
+                
+                # Calculate quality rating based on real factors
+                quality_rating, _ = calculate_quality_score(submission_data, site, ai_result)
+                logging.info(f"Quality Score Calculated: {quality_rating}")
+                
+            except Exception as e:
+                logging.error(f"Error calculating quality score: {e}")
+                # Fallback to existing value or default
+                if not quality_rating:
+                    quality_rating = 3
+
             # Create submission record
             submission = WaterLevelSubmission(
                 site_id=site_id,
@@ -1580,9 +1606,9 @@ def create_app(config_name='default'):
                 gps_longitude=longitude,
                 verification_method=verification_method,
                 qr_code_scanned=qr_code_scanned,
-                quality_rating=quality_rating
+                quality_rating=quality_rating,
+                tamper_score=0.0  # Initial score, will be updated by tamper engine
             )
-            
             db.session.add(submission)
             db.session.commit()
             
@@ -2655,6 +2681,7 @@ def create_app(config_name='default'):
     
     @app.route('/ai-call-reporting')
     @login_required
+    @role_required(['supervisor', 'admin', 'central_analyst'])
     def ai_call_reporting():
         """AI Call Reporting Dashboard"""
         # Auto-sync on page load
@@ -2667,6 +2694,98 @@ def create_app(config_name='default'):
         return render_template('ai_call_reporting.html', 
                                voice_submissions=voice_submissions,
                                sync_result=sync_result)
+
+    # === FLOOD PREDICTION ROUTES ===
+    # === FLOOD PREDICTION ROUTES ===
+    
+    @app.route('/api/predict-flood/<int:site_id>')
+    @login_required
+    def predict_flood(site_id):
+        """Predict flood risk based on rainfall"""
+        site = MonitoringSite.query.get_or_404(site_id)
+        
+        # Default coords if missing (using sample coords for demo if 0,0)
+        lat = site.latitude if site.latitude and site.latitude != 0 else 28.6139
+        lon = site.longitude if site.longitude and site.longitude != 0 else 77.2090
+        
+        prediction = get_rainfall_prediction(lat, lon)
+        
+        if prediction:
+            return jsonify({
+                'success': True,
+                'site_name': site.name,
+                'prediction': prediction
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Could not fetch weather data'
+            })
+
+    @app.route('/api/weather/heatmap')
+    @login_required
+    def weather_heatmap_data():
+        """Get data for weather heatmap"""
+        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        heatmap_data = []
+        
+        for site in sites:
+            try:
+                # Skip invalid coords
+                if not site.latitude or not site.longitude:
+                    continue
+                    
+                prediction = get_rainfall_prediction(site.latitude, site.longitude)
+                
+                risk_level = 'low'
+                rainfall = 0
+                predicted_rise = 0
+                
+                if prediction:
+                    rainfall = prediction['rainfall_mm']
+                    predicted_rise = prediction['predicted_rise_m']
+                    
+                    if rainfall > 100: # 100mm = very heavy
+                         risk_level = 'critical'
+                    elif rainfall > 50:
+                         risk_level = 'high'
+                    elif rainfall > 10:
+                         risk_level = 'medium'
+                
+                heatmap_data.append({
+                    'id': site.id,
+                    'name': site.name,
+                    'lat': site.latitude,
+                    'lng': site.longitude,
+                    'rainfall': rainfall,
+                    'predicted_rise': predicted_rise,
+                    'risk_level': risk_level
+                })
+            except Exception as e:
+                logging.error(f"Error processing site {site.id} for heatmap: {e}")
+                
+        return jsonify(heatmap_data)
+
+    @app.route('/weather-map')
+    @login_required
+    def weather_map():
+        """Render Weather Map page"""
+        return render_template('weather_map.html')
+
+    @app.route('/api/weather/check-alerts', methods=['POST'])
+    @login_required
+    def trigger_weather_alerts():
+        """Manually trigger detailed forecast check and alerts"""
+        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        alerts_sent = 0
+        
+        for site in sites:
+            if site.latitude and site.longitude:
+                if whatsapp_service.check_forecast_and_alert(site):
+                    alerts_sent += 1
+        
+        return jsonify({'success': True, 'alerts_sent': alerts_sent})
+
     
     # === TWILIO VOICE CALL ROUTES ===
     # Store call context in memory (phone -> data mapping)

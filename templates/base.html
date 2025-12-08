@@ -45,126 +45,218 @@
 </head>
 
 <body class="bg-light">
-    <!-- Mobile App Header -->
-    <div class="d-lg-none d-block bg-primary text-white py-2 text-center app-header" id="mobile-header">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <span class="fw-bold">
-                    <i class="bi bi-droplet"></i> JalScan
-                </span>
-                <div class="d-flex align-items-center">
-                    <span class="badge bg-success me-2" id="network-status-badge">
-                        <i class="bi bi-wifi"></i>
-                    </span>
-                    <span class="badge bg-info" id="gps-status-badge">
-                        <i class="bi bi-geo-alt"></i>
-                    </span>
-                    {% if current_user.is_authenticated %}
-                    <div class="dropdown ms-2">
-                        <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button"
-                            id="mobileUserDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-person-circle"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end mobile-dropdown">
-                            <li><span class="dropdown-item-text"><small>{{ current_user.username }}</small></span></li>
-                            <li><span class="dropdown-item-text"><small>Role: {{ current_user.role|title
-                                        }}</small></span></li>
-                            <li>
-                                <hr class="dropdown-divider">
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
-                                    <i class="bi bi-box-arrow-right"></i> Logout
-                                </a>
-                            </li>
-                        </ul>
+
+    <div id="wrapper">
+        <!-- Sidebar -->
+        <aside id="sidebar-wrapper">
+            <div class="sidebar-heading text-white">
+                <i class="bi bi-droplet-fill me-2 fs-4"></i>
+                <span class="sidebar-brand-text">JalScan</span>
+            </div>
+
+            <div class="list-group list-group-flush mt-2">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'dashboard' }}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+
+                <a href="{{ url_for('submissions') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'submissions' }}">
+                    <i class="bi bi-list-check"></i>
+                    <span class="nav-text">My Submissions</span>
+                </a>
+
+
+
+                {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
+                <a href="{{ url_for('cloud_dashboard') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'cloud_dashboard' }}">
+                    <i class="bi bi-cloud-fill"></i>
+                    <span class="nav-text">Cloud Dashboard</span>
+                </a>
+                <a href="{{ url_for('admin_tamper_detection') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'admin_tamper_detection' }}">
+                    <i class="bi bi-shield-check"></i>
+                    <span class="nav-text">Tamper Detection</span>
+                </a>
+                {% endif %}
+
+                {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('admin_public_submissions') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'admin_public_submissions' }}">
+                    <i class="bi bi-people"></i>
+                    <span class="nav-text">Public Submissions</span>
+                </a>
+                <a href="{{ url_for('admin_sites') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'admin_sites' }}">
+                    <i class="bi bi-geo-alt"></i>
+                    <span class="nav-text">Sites</span>
+                </a>
+                <a href="{{ url_for('admin_subscribers') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'admin_subscribers' }}">
+                    <i class="bi bi-whatsapp"></i>
+                    <span class="nav-text">Subscribers</span>
+                </a>
+                {% endif %}
+
+                <a href="{{ url_for('ai_call_reporting') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'ai_call_reporting' }}">
+                    <i class="bi bi-robot"></i>
+                    <span class="nav-text">AI Call Reports</span>
+                </a>
+
+                <a href="{{ url_for('weather_map') }}"
+                    class="sidebar-nav-item {{ 'active' if request.endpoint == 'weather_map' }}">
+                    <i class="bi bi-map"></i>
+                    <span class="nav-text">Weather Map</span>
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Sidebar Footer (Logout) -->
+            {% if current_user.is_authenticated %}
+            <div class="mt-auto pb-3">
+                <a href="{{ url_for('auth.logout') }}" class="sidebar-nav-item text-danger">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="nav-text">Logout</span>
+                </a>
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Page Content -->
+        <div id="page-content-wrapper">
+            <!-- Mobile Header (Visible only on mobile) -->
+            <div class="d-lg-none d-block bg-primary text-white py-2 text-center app-header" id="mobile-header">
+                <div class="container">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">
+                            <i class="bi bi-droplet"></i> JalScan
+                        </span>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-success me-2" id="network-status-badge">
+                                <i class="bi bi-wifi"></i>
+                            </span>
+                            <span class="badge bg-info" id="gps-status-badge">
+                                <i class="bi bi-geo-alt"></i>
+                            </span>
+                            {% if current_user.is_authenticated %}
+                            <div class="dropdown ms-2">
+                                <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button"
+                                    id="mobileUserDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-person-circle"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end mobile-dropdown">
+                                    <li><span class="dropdown-item-text"><small>{{ current_user.username
+                                                }}</small></span></li>
+                                    <li><span class="dropdown-item-text"><small>Role: {{ current_user.role|title
+                                                }}</small></span></li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i
+                                                class="bi bi-box-arrow-right"></i> Logout</a></li>
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% endif %}
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Main Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary d-none d-lg-block app-navbar">
-        <div class="container-fluid navbar-container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-droplet"></i> JalScan
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav ms-auto">
+            <!-- Top Navbar (Toggle + User Menu) - Desktop Only -->
+            <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom top-navbar px-3 d-none d-lg-flex">
+                <button class="btn btn-outline-primary" id="sidebarToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+
+                <!-- Weather Map Specific Controls -->
+                {% if request.endpoint == 'weather_map' %}
+                <div class="d-flex align-items-center ms-3">
+                    <span class="h6 mb-0 me-3 border-start ps-3 text-secondary">Weather Map</span>
+                    <button id="navCheckAlertsBtn" class="btn btn-sm btn-warning me-2" onclick="checkWeatherAlerts()">
+                        <i class="bi bi-bell-fill"></i> Alerts
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="refreshMap()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                {% endif %}
+
+                <div class="ms-auto d-flex align-items-center">
                     {% if current_user.is_authenticated %}
-                    <a class="nav-link" href="{{ url_for('dashboard') }}">
-                        <i class="bi bi-speedometer2"></i> Dashboard
-                    </a>
-                    <a class="nav-link" href="{{ url_for('submissions') }}">
-                        <i class="bi bi-list-check"></i> My Submissions
-                    </a>
-                    <a class="nav-link" href="{{ url_for('qr_generator') }}">
-                        <i class="bi bi-qr-code"></i> QR Generator
-                    </a>
-
-
-
-                    {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
-                    <a class="nav-link" href="{{ url_for('cloud_dashboard') }}">
-                        <i class="bi bi-cloud-fill"></i> Cloud Dashboard
-                    </a>
-                    <a class="nav-link" href="{{ url_for('admin_tamper_detection') }}">
-                        <i class="bi bi-shield-check"></i> Tamper Detection
-                    </a>
-                    {% endif %}
-
-                    {% if current_user.role == 'admin' %}
-                    <a class="nav-link" href="{{ url_for('admin_public_submissions') }}">
-                        <i class="bi bi-people"></i> Public Submissions
-                    </a>
-                    <a class="nav-link" href="{{ url_for('admin_sites') }}">
-                        <i class="bi bi-geo-alt"></i> Sites
-                    </a>
-                    <a class="nav-link" href="{{ url_for('admin_subscribers') }}">
-                        <i class="bi bi-whatsapp"></i> Subscribers
-                    </a>
-                    {% endif %}
-
-                    <!-- AI Call Reporting Feature -->
-                    <a class="nav-link" href="{{ url_for('ai_call_reporting') }}">
-                        <i class="bi bi-robot"></i> AI Call Reports
-                    </a>
-
-                    <div class="nav-item dropdown dropdown-user-menu">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
-                            data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                    <div class="dropdown">
+                        <a class="nav-link dropdown-toggle text-dark d-flex align-items-center" href="#"
+                            id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle fs-5 me-2"></i>
+                            <span class="fw-bold">{{ current_user.username }}</span>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu" aria-labelledby="navbarDropdown">
-                            <li><span class="dropdown-item-text"><small><strong>Role:</strong> {{
-                                        current_user.role|title }}</small></span></li>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><span class="dropdown-item-text text-muted small">Role: {{ current_user.role|title
+                                    }}</span></li>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
-                            <li>
-                                <a class="dropdown-item logout-item" href="{{ url_for('auth.logout') }}">
-                                    <i class="bi bi-box-arrow-right"></i> Logout
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i
+                                        class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
                         </ul>
                     </div>
                     {% else %}
-                    <a class="nav-link" href="{{ url_for('public_upload') }}">
-                        <i class="bi bi-cloud-upload"></i> Submit Photo
-                    </a>
-                    <a class="nav-link" href="{{ url_for('auth.login') }}">
-                        <i class="bi bi-box-arrow-in-right"></i> Agent Login
-                    </a>
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">Login</a>
                     {% endif %}
                 </div>
+            </nav>
+
+            <div class="container-fluid mt-4 mb-5 pb-5">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="row">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show"
+                            role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <!-- Content Block -->
+                {% block content %}{% endblock %}
+
+
             </div>
+
+            <!-- Desktop Footer (Inside content wrapper) -->
+            <footer class="bg-light py-4 border-top d-none d-lg-block app-footer mt-auto">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary">
+                                <i class="bi bi-droplet"></i> JalScan
+                            </h6>
+                            <p class="text-muted small">
+                                Water Level Monitoring System<br>
+                                Secure • Verifiable • Digital
+                            </p>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <p class="text-muted small">
+                                <i class="bi bi-shield-check"></i> CWC Field Operations<br>
+                                <span id="current-time"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </footer>
         </div>
-    </nav>
+    </div>
+    <!-- /#wrapper -->
 
     <!-- Mobile Bottom Navigation -->
     <nav class="navbar navbar-dark bg-primary fixed-bottom d-lg-none d-block app-bottom-nav" id="mobile-nav">
@@ -181,14 +273,12 @@
                     <small>Capture</small>
                 </a>
 
-
-
                 <a class="nav-link text-center text-white" href="{{ url_for('submissions') }}">
                     <i class="bi bi-list-check d-block"></i>
                     <small>Submissions</small>
                 </a>
 
-                <!-- More Menu Dropdown for Additional Options -->
+                <!-- More Menu Dropdown -->
                 <div class="nav-item dropup">
                     <a class="nav-link text-center text-white dropdown-toggle" href="#" role="button"
                         id="mobileMoreDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -220,15 +310,16 @@
                             </a>
                         </li>
                         <li>
+                            <a class="dropdown-item" href="{{ url_for('weather_map') }}">
+                                <i class="bi bi-map me-2"></i>Weather Map
+                            </a>
+                        </li>
+                        <li>
                             <a class="dropdown-item" href="{{ url_for('analytics') }}">
                                 <i class="bi bi-graph-up me-2"></i>Analytics
                             </a>
                         </li>
-                        <li>
-                            <a class="dropdown-item" href="{{ url_for('qr_generator') }}">
-                                <i class="bi bi-qr-code me-2"></i>QR Generator
-                            </a>
-                        </li>
+
                     </ul>
                 </div>
 
@@ -266,6 +357,7 @@
                         </li>
                     </ul>
                 </div>
+
                 {% else %}
                 <a class="nav-link text-center text-white" href="{{ url_for('public_upload') }}">
                     <i class="bi bi-cloud-upload d-block"></i>
@@ -279,49 +371,6 @@
             </div>
         </div>
     </nav>
-
-    <!-- Main Content -->
-    <div class="main-content-container">
-        <div class="container mt-2 mt-lg-4 mb-5 mb-lg-0 content-wrapper">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div
-                class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show d-flex align-items-center">
-                <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
-                <div class="flex-grow-1">{{ message }}</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
-
-            {% block content %}{% endblock %}
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="bg-light py-4 border-top d-none d-lg-block app-footer">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6 class="text-primary">
-                        <i class="bi bi-droplet"></i> JalScan
-                    </h6>
-                    <p class="text-muted small">
-                        Water Level Monitoring System<br>
-                        Secure • Verifiable • Digital
-                    </p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <p class="text-muted small">
-                        <i class="bi bi-shield-check"></i> CWC Field Operations<br>
-                        <span id="current-time"></span>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </footer>
 
     <!-- Install App Prompt -->
     <div class="modal fade" id="installPrompt" tabindex="-1">
@@ -461,18 +510,19 @@
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type} alert-dismissible fade show global-custom-alert`;
             alertDiv.innerHTML = `
-                <i class="bi bi-${getAlertIcon(type)} me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
+<i class="bi bi-${getAlertIcon(type)} me-2"></i>
+${message}
+<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+`;
 
             // Insert after flash messages or at top of container
-            const container = document.querySelector('.content-wrapper');
-            const existingAlertsContainer = container.querySelector('.alert-dismissible');
-            if (existingAlertsContainer) {
-                existingAlertsContainer.parentNode.insertBefore(alertDiv, existingAlertsContainer.nextSibling);
-            } else {
+            const container = document.querySelector('.container-fluid'); // Updated to check .container-fluid inside page-content-wrapper
+            if (container) {
                 container.insertBefore(alertDiv, container.firstChild);
+            }
+            // Fallback
+            else {
+                document.body.prepend(alertDiv);
             }
 
             // Auto remove after 5 seconds
@@ -518,11 +568,11 @@
             loaderDiv.className = 'global-loading-indicator position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center';
             loaderDiv.style.cssText = 'background: rgba(0,0,0,0.5); z-index: 9999;';
             loaderDiv.innerHTML = `
-                <div class="bg-white rounded p-4 text-center shadow">
-                    <div class="spinner-border text-primary mb-3"></div>
-                    <p class="mb-0 fw-medium">${message}</p>
-                </div>
-            `;
+<div class="bg-white rounded p-4 text-center shadow">
+    <div class="spinner-border text-primary mb-3"></div>
+    <p class="mb-0 fw-medium">${message}</p>
+</div>
+`;
 
             document.body.appendChild(loaderDiv);
         }
@@ -600,12 +650,33 @@
                     }
                 });
             });
+
+            // Sidebar Toggle
+            const toggleBtn = document.getElementById('sidebarToggle');
+            const wrapper = document.getElementById('wrapper');
+
+            // Check localStorage
+            if (localStorage.getItem('sidebar-collapsed') === 'true') {
+                wrapper.classList.add('toggled');
+            }
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    wrapper.classList.toggle('toggled');
+
+                    // Save state
+                    localStorage.setItem('sidebar-collapsed', wrapper.classList.contains('toggled'));
+                });
+            }
         });
     </script>
 
     {% block scripts %}{% endblock %}
 
     <style>
+        /* Preserved styles for reference, though moved to style.css mostly. 
+           Mobile styles specific to headers/navs kept here or ensure style.css covers them. */
         :root {
             --primary-color: #0d6efd;
             --success-color: #198754;
@@ -625,22 +696,11 @@
             background-color: #f8f9fa;
         }
 
-        /* Header and Navigation Styles */
+        /* Header and Navigation Styles (Mobile) */
         .app-header {
             background: #0d6efd !important;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
             z-index: 1030;
-        }
-
-        .app-navbar {
-            background: #0d6efd !important;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-            z-index: 1029;
-            position: relative;
-        }
-
-        .navbar-container {
-            padding: 0 15px;
         }
 
         .app-bottom-nav {
@@ -656,28 +716,10 @@
             border-top: 1px solid rgba(0, 0, 0, 0.1);
         }
 
-        /* Content Wrapper - Solid Background */
-        .content-wrapper {
-            flex: 1;
-            background-color: #ffffff;
-            border-radius: 8px;
-            margin-top: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
         /* Mobile-specific styles */
         @media (max-width: 768px) {
             body {
                 padding-bottom: 60px;
-            }
-
-            .content-wrapper {
-                margin: 8px;
-                padding: 15px;
-                border-radius: 8px;
-                background-color: #ffffff;
             }
 
             .btn {
