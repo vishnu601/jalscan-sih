@@ -1,6 +1,6 @@
-const CACHE_NAME = 'jalscan-v10';
-const STATIC_CACHE = 'jalscan-static-v10';
-const DYNAMIC_CACHE = 'jalscan-dynamic-v10';
+const CACHE_NAME = 'jalscan-v11';
+const STATIC_CACHE = 'jalscan-static-v11';
+const DYNAMIC_CACHE = 'jalscan-dynamic-v11';
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/login',
   '/static/css/style.css',
   '/static/js/i18n.js',
+  '/static/js/offline-storage.js',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/manifest.json',
@@ -156,9 +157,89 @@ self.addEventListener('notificationclick', (event) => {
 // Sync submissions that were made offline
 async function syncSubmissions() {
   try {
-    // This would sync any offline submissions stored in IndexedDB
     console.log('[Service Worker] Syncing offline submissions...');
+
+    // Open IndexedDB
+    const db = await openIndexedDB();
+    const pending = await getPendingFromDB(db);
+
+    if (pending.length === 0) {
+      console.log('[Service Worker] No pending submissions');
+      return;
+    }
+
+    console.log(`[Service Worker] Found ${pending.length} pending submissions`);
+
+    for (const submission of pending) {
+      try {
+        // Create FormData
+        const formData = new FormData();
+        formData.append('water_level', submission.water_level);
+        formData.append('notes', submission.notes || '');
+        formData.append('latitude', submission.latitude);
+        formData.append('longitude', submission.longitude);
+        formData.append('location_verified', submission.location_verified || 'true');
+        formData.append('qr_scanned', submission.qr_scanned || 'false');
+
+        // Handle photo if present
+        if (submission.photo) {
+          const response = await fetch(submission.photo);
+          const blob = await response.blob();
+          formData.append('photo', blob, 'offline_photo.jpg');
+        }
+
+        // Submit
+        const response = await fetch(`/api/submit-reading/${submission.site_id}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          await deleteFromDB(db, submission.id);
+          console.log(`[Service Worker] Synced submission ${submission.id}`);
+        }
+      } catch (error) {
+        console.error(`[Service Worker] Failed to sync ${submission.id}:`, error);
+      }
+    }
+
+    // Notify clients
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_COMPLETE' });
+    });
+
   } catch (error) {
     console.error('[Service Worker] Sync failed:', error);
   }
+}
+
+// IndexedDB helpers for service worker
+function openIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('JalScanOfflineDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+function getPendingFromDB(db) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['pendingSubmissions'], 'readonly');
+    const store = transaction.objectStore('pendingSubmissions');
+    const index = store.index('synced');
+    const request = index.getAll(IDBKeyRange.only(false));
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result || []);
+  });
+}
+
+function deleteFromDB(db, id) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['pendingSubmissions'], 'readwrite');
+    const store = transaction.objectStore('pendingSubmissions');
+    const request = store.delete(id);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
 }

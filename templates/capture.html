@@ -770,6 +770,40 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Submitting...';
 
+        // Gather submission data
+        const submissionData = {
+            site_id: document.querySelector('input[name="site_id"]').value,
+            water_level: waterLevel,
+            latitude: document.getElementById('latitude').value,
+            longitude: document.getElementById('longitude').value,
+            verification_method: document.getElementById('verification_method').value,
+            qr_scanned: document.getElementById('qr_code_scanned').value,
+            photo: capturedPhoto,  // Store as base64 for offline
+            notes: document.getElementById('notes')?.value || ''
+        };
+
+        // Check if we're offline - save locally
+        if (!navigator.onLine) {
+            debugLog('Device is offline, saving to IndexedDB...');
+            try {
+                if (window.OfflineStorage) {
+                    await window.OfflineStorage.saveSubmission(submissionData);
+                    await window.OfflineStorage.registerBackgroundSync();
+                    alert('📴 You are offline. Your reading has been saved and will be submitted automatically when internet is available.');
+                    window.location.href = '/dashboard';
+                } else {
+                    throw new Error('Offline storage not available');
+                }
+            } catch (offlineError) {
+                debugLog('Offline save error: ' + offlineError.message);
+                alert('Error saving offline: ' + offlineError.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Submit Reading';
+            }
+            return;
+        }
+
+        // Online - try to submit normally
         try {
             debugLog('Converting photo to blob...');
 
@@ -790,12 +824,12 @@
             debugLog('Blob created, size: ' + blob.size + ' bytes');
 
             const formData = new FormData();
-            formData.append('site_id', document.querySelector('input[name="site_id"]').value);
-            formData.append('water_level', waterLevel);
-            formData.append('latitude', document.getElementById('latitude').value);
-            formData.append('longitude', document.getElementById('longitude').value);
-            formData.append('verification_method', document.getElementById('verification_method').value);
-            formData.append('qr_code_scanned', document.getElementById('qr_code_scanned').value);
+            formData.append('site_id', submissionData.site_id);
+            formData.append('water_level', submissionData.water_level);
+            formData.append('latitude', submissionData.latitude);
+            formData.append('longitude', submissionData.longitude);
+            formData.append('verification_method', submissionData.verification_method);
+            formData.append('qr_code_scanned', submissionData.qr_scanned);
             formData.append('photo', blob, 'photo.jpg');
 
             debugLog('Sending form data to server...');
@@ -809,7 +843,7 @@
             debugLog('Server response: ' + JSON.stringify(result));
 
             if (result.success) {
-                alert('Reading submitted successfully!');
+                alert('✅ Reading submitted successfully!');
                 window.location.href = '/dashboard';
             } else {
                 throw new Error(result.error || 'Submission failed');
@@ -817,6 +851,23 @@
 
         } catch (error) {
             debugLog('Submission error: ' + error.message);
+
+            // Network error - try to save offline as fallback
+            if (error.message.includes('fetch') || error.message.includes('network') || error.name === 'TypeError') {
+                debugLog('Network error detected, saving offline...');
+                try {
+                    if (window.OfflineStorage) {
+                        await window.OfflineStorage.saveSubmission(submissionData);
+                        await window.OfflineStorage.registerBackgroundSync();
+                        alert('📴 Network error. Your reading has been saved offline and will sync when connection is restored.');
+                        window.location.href = '/dashboard';
+                        return;
+                    }
+                } catch (offlineError) {
+                    debugLog('Offline fallback failed: ' + offlineError.message);
+                }
+            }
+
             alert('Error submitting reading: ' + error.message);
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Submit Reading';
