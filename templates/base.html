@@ -1121,18 +1121,20 @@ ${message}
         /* JalHelp Chat Widget */
         .gpt-chat-widget {
             position: fixed;
-            bottom: 80px;
-            left: 20px;
-            width: 380px;
+            bottom: 145px;
+            /* Above the FAB */
+            right: 20px;
+            /* Moved to right side */
+            width: 350px;
             max-width: calc(100vw - 40px);
-            height: 500px;
-            max-height: calc(100vh - 120px);
+            height: 450px;
+            max-height: calc(100vh - 180px);
             background: white;
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
             display: none;
             flex-direction: column;
-            z-index: 9999;
+            z-index: 1026;
             overflow: hidden;
         }
 
@@ -1261,10 +1263,12 @@ ${message}
         /* Floating GPT Button (for non-sidebar pages) */
         .gpt-fab {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 60px;
-            height: 60px;
+            bottom: 80px;
+            /* Above the bottom nav */
+            right: 20px;
+            /* Moved to right side */
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -1275,8 +1279,10 @@ ${message}
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
-            z-index: 9998;
+            z-index: 1025;
+            /* Below modals but above other content */
             transition: transform 0.3s, box-shadow 0.3s;
+            touch-action: manipulation;
         }
 
         .gpt-fab:hover {
