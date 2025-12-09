@@ -19,7 +19,8 @@
 
 <div class="row mt-4">
     <!-- Statistics Cards -->
-    {% if current_user.has_permission('can_view_all_submissions') %}
+    {% if current_user.role in ['admin', 'supervisor'] %}
+    <!-- Admin/Supervisor: See all data -->
     <div class="col-md-3 mb-4">
         <div class="card bg-primary text-white">
             <div class="card-body">
@@ -80,6 +81,56 @@
                     </div>
                     <div class="align-self-center">
                         <i class="bi bi-person display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% elif current_user.role == 'central_analyst' %}
+    <!-- Analyst: See assigned sites' data only -->
+    <div class="col-md-4 mb-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_submissions }}</h4>
+                        <p class="card-text">Assigned Sites Submissions</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-cloud-upload display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ pending_sync }}</h4>
+                        <p class="card-text" data-i18n="pending_sync">Pending Sync</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-arrow-repeat display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ sites|length }}</h4>
+                        <p class="card-text">Assigned Sites</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-geo-alt display-4"></i>
                     </div>
                 </div>
             </div>
