@@ -79,83 +79,81 @@ def analyze_water_gauge(image_path):
         # Load the image
         img = Image.open(image_path)
         
-        # Comprehensive prompt for water gauge reading with tamper detection
-        prompt = """You are an expert hydrologist and image analyst who specializes in reading water level gauges and detecting image tampering.
+        # Precise Hydrological Gauge Reader with Chain-of-Thought reasoning
+        prompt = """### PRECISE HYDROLOGICAL GAUGE READER
 
-TASK: Analyze this image to read the water level gauge and check for any signs of tampering or manipulation.
+**ROLE**
+You are an expert Hydrologist and Computer Vision Analyst specializing in reading vertical staff gauges in flood conditions. Your priority is PRECISION over estimation.
 
-## STEP 1: IMAGE QUALITY ASSESSMENT
-First, evaluate the image quality:
-- Is the image clear or blurry?
-- Is the lighting adequate?
-- Is the gauge visible and readable?
-- Is the image taken from a suitable angle?
+**CORE DIRECTIVE**
+You must extract the water level reading from an image of a numbered gauge. You must use a "Chain of Thought" process to verify the direction of the scale and the relative position of the water line before generating a final number.
 
-## STEP 2: GAUGE DETECTION
-Look for the water level gauge in the image:
-- Identify the measuring stick/staff with painted markings
-- Note the position of the gauge (left/right/center of image)
-- Check if numbers are visible (usually 0-5 meters or similar)
-- Look for subdivision marks between main numbers
+**ANALYSIS PROTOCOL (Follow these steps strictly)**
 
-## STEP 3: WATER LEVEL READING
-Find and read the water level:
-- Locate where the water surface meets the gauge
-- Read the exact measurement at the water line
-- Note the units (meters or centimeters - convert to meters)
-- Be precise with decimals (e.g., 2.35 meters)
+1.  **Identify Visible Markers:**
+    * List all clearly legible numbers on the gauge from Top to Bottom.
+    * *Example Output:* "Visible numbers are 9, 8, 7, 6."
 
-## STEP 4: TAMPER DETECTION
-Check for signs of image manipulation:
-- Unusual pixelation or artifacts around gauge numbers
-- Inconsistent lighting or shadows
-- Signs of digital editing (clone stamping, airbrushing)
-- Unnatural color patterns
-- Gauge numbers that look altered or pasted
-- Water line that looks artificially drawn
-- Missing or inconsistent reflections
-- Perspective distortions that don't match surroundings
+2.  **Determine Scale Direction:**
+    * Do the numbers increase as you go UP or DOWN?
+    * *Observation:* Standard flood gauges increase from bottom to top (e.g., 6 is below 7).
 
-## OUTPUT FORMAT
+3.  **Locate the Water Line (Meniscus):**
+    * Identify the exact pixel line where the gauge intersects the water surface.
+    * **CRITICAL CHECK:** Is the water line *between* two visible numbers, or is it *below* the lowest visible number?
+    * *Constraint:* If the lowest visible number is '6' and the water line is below that number (revealing tick marks under the 6), the value MUST be less than 6. Do not guess a value between 6 and 7.
+
+4.  **Calculate & Refine:**
+    * Count the minor graduation marks (ticks) between the main numbers to determine the scale (usually 0.1m or 0.02m per tick).
+    * Interpolate the exact position of the water line based on these ticks.
+
+5.  **Tamper Detection:**
+    * Check for signs of image manipulation: unusual pixelation, inconsistent shadows, digital editing artifacts, unnatural colors.
+
+**FEW-SHOT EXAMPLES FOR LOGIC CORRECTION**
+
+* **Bad Logic:** "I see 6 and 7. The gauge is clear. Reading is 6.5." (Incorrect because water was below 6).
+* **Correct Logic:** "Visible numbers are 7 and 6. The scale increases upwards. The water line is below the 6 mark by approximately 2 minor ticks. Therefore, the reading is below 6.0. Estimated reading: 5.8m."
+
+**RESPONSE FORMAT**
 Return ONLY this JSON structure:
 {
-    "water_level": 2.35,
+    "visible_markers": [7, 6, 5],
+    "scale_direction": "increases upwards",
+    "water_line_position": "below the 6 mark by 2 ticks",
+    "reasoning": "Visible numbers are 7, 6, 5. Scale increases upwards. Water line is below 6 mark by approximately 2 minor ticks (each tick = 0.1m). Reading = 6.0 - 0.2 = 5.8m",
+    "water_level": 5.8,
     "confidence": 0.85,
     "is_valid": true,
-    "gauge_location": "center-left of image, clearly visible",
-    "water_line_position": "water meets gauge at 2.35m mark",
+    "gauge_location": "center of image, vertical staff gauge clearly visible",
     "tamper_detected": false,
     "tamper_reason": null,
     "image_quality": "good",
     "suggestions": [],
-    "reason": "Clear reading at 2.35m mark on vertical gauge staff"
+    "reason": "Clear reading at 5.8m - water line is 2 ticks below the 6 mark"
 }
 
-## FIELD EXPLANATIONS:
-- water_level: Reading in METERS (decimal number, e.g., 2.35). Set to null if unreadable.
-- confidence: 0.0 to 1.0 based on clarity and certainty
-- is_valid: true if you can read the gauge, false otherwise
-- gauge_location: Describe WHERE in the image the gauge is (e.g., "left side", "center", "not visible")
-- water_line_position: Describe where water meets the gauge
-- tamper_detected: true if image shows signs of manipulation
-- tamper_reason: If tampered, explain what looks suspicious
+**FIELD EXPLANATIONS:**
+- visible_markers: Array of numbers visible on the gauge (from top to bottom)
+- scale_direction: "increases upwards" or "increases downwards"
+- water_line_position: Detailed description of where water meets gauge relative to markers
+- reasoning: Your step-by-step chain of thought logic
+- water_level: Final reading in METERS (decimal). Set to null if unreadable.
+- confidence: 0.0 to 1.0 (High=0.8+, Medium=0.5-0.8, Low=<0.5)
+- is_valid: true if gauge is readable, false otherwise
+- gauge_location: Where in the image the gauge appears
+- tamper_detected: true if image shows manipulation signs
+- tamper_reason: Explanation if tampered
 - image_quality: "excellent", "good", "fair", "poor", or "unusable"
-- suggestions: Array of tips to get better reading. Include if confidence < 0.8 or quality is poor. Examples:
-  - "Move closer to the gauge for clearer numbers"
-  - "Ensure better lighting on the gauge"
-  - "Take photo straight-on, not at an angle"
-  - "Avoid reflections on the water surface"
-  - "Keep camera steady to avoid blur"
-  - "Make sure the full gauge scale is visible"
-- reason: Brief explanation of your reading or why it failed
+- suggestions: Tips for better reading if confidence < 0.8
+- reason: Brief summary of your reading
 
-## IMPORTANT NOTES:
-- If image looks tampered, set tamper_detected to true and explain in tamper_reason
-- If you cannot read the gauge, set water_level to null and is_valid to false
-- Always provide helpful suggestions when confidence is low
-- Be thorough but return ONLY the JSON, nothing else
-
-Return ONLY the JSON object, no other text."""
+**CRITICAL RULES:**
+1. ALWAYS verify scale direction before reading
+2. If water is BELOW the lowest visible number, the reading MUST be less than that number
+3. Count ticks carefully - don't estimate
+4. If unsure, lower your confidence score and add suggestions
+5. Return ONLY the JSON, no other text"""
         
         response = model.generate_content([prompt, img])
         text = response.text.strip()
