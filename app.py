@@ -130,6 +130,11 @@ def create_app(config_name='default'):
             return redirect(url_for('dashboard'))
         return redirect(url_for('public_upload'))
 
+    @app.route('/offline')
+    def offline():
+        """Offline fallback page - no auth required"""
+        return render_template('offline.html')
+
     @app.route('/dashboard')
     @login_required
     def dashboard():

@@ -1,11 +1,13 @@
-const CACHE_NAME = 'jalscan-v11';
-const STATIC_CACHE = 'jalscan-static-v11';
-const DYNAMIC_CACHE = 'jalscan-dynamic-v11';
+const CACHE_NAME = 'jalscan-v12';
+const STATIC_CACHE = 'jalscan-static-v12';
+const DYNAMIC_CACHE = 'jalscan-dynamic-v12';
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [
   '/',
   '/login',
+  '/offline',
+  '/dashboard',
   '/static/css/style.css',
   '/static/js/i18n.js',
   '/static/js/offline-storage.js',
@@ -109,9 +111,9 @@ self.addEventListener('fetch', (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // Return offline page if available
-          if (request.headers.get('accept').includes('text/html')) {
-            return caches.match('/');
+          // Return offline page for HTML requests
+          if (request.headers.get('accept') && request.headers.get('accept').includes('text/html')) {
+            return caches.match('/offline');
           }
         });
       })
