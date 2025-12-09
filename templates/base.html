@@ -792,6 +792,54 @@ ${message}
         });
     </script>
 
+    <!-- Mobile/PWA Touch Event Fixes -->
+    <script>
+        (function () {
+            // Detect if running as PWA
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone === true;
+
+            if (isPWA) {
+                console.log('[PWA] Running in standalone mode');
+            }
+
+            // Fix for iOS/PWA touch events not firing
+            document.addEventListener('touchstart', function () { }, { passive: true });
+
+            // Ensure buttons respond to touch on mobile
+            document.addEventListener('DOMContentLoaded', function () {
+                // Add active states on touch for better feedback
+                const touchableElements = document.querySelectorAll('button, .btn, a, [role="button"]');
+
+                touchableElements.forEach(function (el) {
+                    el.addEventListener('touchstart', function (e) {
+                        this.classList.add('active');
+                    }, { passive: true });
+
+                    el.addEventListener('touchend', function (e) {
+                        this.classList.remove('active');
+                    }, { passive: true });
+
+                    el.addEventListener('touchcancel', function (e) {
+                        this.classList.remove('active');
+                    }, { passive: true });
+                });
+
+                // Fix for modals in PWA
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(function (modal) {
+                    modal.addEventListener('touchmove', function (e) {
+                        // Allow scrolling inside modal body
+                        const modalBody = modal.querySelector('.modal-body');
+                        if (modalBody && modalBody.contains(e.target)) {
+                            e.stopPropagation();
+                        }
+                    }, { passive: true });
+                });
+            });
+        })();
+    </script>
+
     {% block scripts %}{% endblock %}
 
     <style>
