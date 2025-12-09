@@ -148,7 +148,7 @@
                                     <div class="spinner-border spinner-border-sm text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
-                                    <span class="ms-2">Analyzing with OpenCV...</span>
+                                    <span class="ms-2">Analyzing with Gemini AI...</span>
                                 </div>
                                 <div id="ai-result" class="d-none">
                                     <p class="mb-1"><strong>Water Level:</strong> <span id="ai-water-level"
@@ -220,7 +220,7 @@
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2">Analyzing with OpenCV...</p>
+                        <p class="mt-2">Analyzing with Gemini AI...</p>
                     </div>
 
                     <div id="gauge-result" class="d-none">
@@ -909,12 +909,10 @@
                     let pipelineBadge = '';
                     let conditionBadges = '';
 
-                    if (data.method === 'opencv_adverse') {
-                        pipelineBadge = '<span class="badge bg-warning text-dark me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
-                    } else if (data.method === 'gemini') {
-                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
-                    } else if (data.method === 'gemini_fallback') {
-                        pipelineBadge = '<span class="badge bg-secondary me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
+                    if (data.method === 'gemini') {
+                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-stars"></i> Gemini AI</span>';
+                    } else {
+                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-stars"></i> Gemini AI</span>';
                     }
 
                     // Show detected conditions
@@ -968,11 +966,7 @@
                     // Error/failure display with pipeline info
                     let pipelineBadge = '';
                     if (data.method) {
-                        if (data.method === 'opencv_adverse') {
-                            pipelineBadge = '<span class="badge bg-warning text-dark"><i class="bi bi-cpu"></i> OpenCV</span> ';
-                        } else if (data.method === 'gemini') {
-                            pipelineBadge = '<span class="badge bg-info"><i class="bi bi-cpu"></i> OpenCV</span> ';
-                        }
+                        pipelineBadge = '<span class="badge bg-info"><i class="bi bi-stars"></i> Gemini AI</span> ';
                     }
 
                     resultDiv.innerHTML = `
