@@ -368,25 +368,25 @@
         <div class="container-fluid">
             <div class="d-flex justify-content-around w-100">
                 {% if current_user.is_authenticated %}
-                <a class="nav-link text-center text-white" href="{{ url_for('dashboard') }}">
+                <a class="nav-link text-center text-white flex-fill" href="{{ url_for('dashboard') }}">
                     <i class="bi bi-speedometer2 d-block"></i>
                     <small>Dashboard</small>
                 </a>
-                <a class="nav-link text-center text-white"
+                <a class="nav-link text-center text-white flex-fill"
                     href="{% if sites %}{{ url_for('capture', site_id=sites[0].id) if sites }}{% else %}#{% endif %}">
                     <i class="bi bi-camera d-block"></i>
                     <small>Capture</small>
                 </a>
 
-                <a class="nav-link text-center text-white" href="{{ url_for('submissions') }}">
+                <a class="nav-link text-center text-white flex-fill" href="{{ url_for('submissions') }}">
                     <i class="bi bi-list-check d-block"></i>
                     <small>Submissions</small>
                 </a>
 
                 <!-- More Menu Dropdown -->
-                <div class="nav-item dropup">
-                    <a class="nav-link text-center text-white dropdown-toggle" href="#" role="button"
-                        id="mobileMoreDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <div class="nav-item dropup flex-fill text-center">
+                    <a class="nav-link text-white dropdown-toggle" href="#" role="button" id="mobileMoreDropdown"
+                        data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-grid-3x3-gap d-block"></i>
                         <small>More</small>
                     </a>
@@ -455,9 +455,9 @@
                 </div>
 
                 <!-- Profile/Logout Mobile Link -->
-                <div class="nav-item dropdown">
-                    <a class="nav-link text-center text-white dropdown-toggle" href="#" role="button"
-                        id="mobileProfileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <div class="nav-item dropup flex-fill text-center">
+                    <a class="nav-link text-white dropdown-toggle" href="#" role="button" id="mobileProfileDropdown"
+                        data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle d-block"></i>
                         <small>Profile</small>
                     </a>
@@ -858,64 +858,59 @@ ${message}
                 });
 
                 // CRITICAL: Fix for mobile bottom nav links and dropdowns
+                // CRITICAL: Fix for mobile bottom nav links and dropdowns
                 if (isMobile || isPWA) {
-                    // Handle direct nav links (Dashboard, Capture, Submissions)
-                    const navLinks = document.querySelectorAll('#mobile-nav > .container-fluid > .d-flex > a.nav-link');
-                    navLinks.forEach(function (link) {
-                        link.addEventListener('touchend', function (e) {
-                            e.preventDefault();
-                            const href = this.getAttribute('href');
-                            if (href && href !== '#') {
-                                console.log('[NavLink] Navigating to:', href);
-                                window.location.href = href;
-                            }
-                        }, { passive: false });
-                    });
+                    // Unified handler for touch/click on bottom nav
+                    const mobileNav = document.getElementById('mobile-nav');
+                    if (mobileNav) {
+                        // Use click event for robustness - fires after touch on mobile
+                        mobileNav.addEventListener('click', function (e) {
+                            const link = e.target.closest('a');
+                            if (!link) return;
 
-                    // Handle dropdown toggles (More, Profile)
-                    const dropdownToggles = document.querySelectorAll('#mobile-nav .dropdown-toggle');
-                    dropdownToggles.forEach(function (toggle) {
-                        toggle.addEventListener('touchend', function (e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('[Dropdown] Toggle touched');
+                            // 1. Dropdown Toggles (More / Profile)
+                            if (link.classList.contains('dropdown-toggle')) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('[MobileNav] Toggle:', link.id);
 
-                            // Close all other dropdowns first
-                            document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(function (menu) {
-                                if (menu !== toggle.nextElementSibling) {
+                                const parent = link.closest('.dropup, .dropdown');
+                                const menu = parent.querySelector('.dropdown-menu');
+                                const isShown = menu.classList.contains('show');
+
+                                // Close all other menus first
+                                document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(m => {
+                                    if (m !== menu) m.classList.remove('show');
+                                });
+
+                                // Toggle this menu
+                                if (isShown) {
                                     menu.classList.remove('show');
+                                } else {
+                                    menu.classList.add('show');
                                 }
-                            });
-
-                            // Toggle this dropdown
-                            const menu = this.nextElementSibling;
-                            if (menu && menu.classList.contains('dropdown-menu')) {
-                                menu.classList.toggle('show');
                             }
-                        }, { passive: false });
-                    });
-
-                    // Handle dropdown items
-                    const dropdownItems = document.querySelectorAll('#mobile-nav .dropdown-item');
-                    dropdownItems.forEach(function (item) {
-                        item.addEventListener('touchend', function (e) {
-                            e.preventDefault();
-                            const href = this.getAttribute('href');
-                            if (href && href !== '#') {
-                                console.log('[DropdownItem] Navigating to:', href);
-                                window.location.href = href;
+                            // 2. Dropdown Items
+                            else if (link.classList.contains('dropdown-item')) {
+                                const href = link.getAttribute('href');
+                                if (href && href !== '#') {
+                                    // Let default navigation happen, but force log
+                                    console.log('[MobileNav] Item:', href);
+                                    // If default prevented by some other script:
+                                    // window.location.href = href;
+                                }
                             }
-                        }, { passive: false });
-                    });
+                        });
 
-                    // Close dropdowns when tapping outside
-                    document.addEventListener('touchend', function (e) {
-                        if (!e.target.closest('#mobile-nav .dropdown')) {
-                            document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(function (menu) {
-                                menu.classList.remove('show');
-                            });
-                        }
-                    }, { passive: true });
+                        // Close menus when clicking outside
+                        document.addEventListener('click', function (e) {
+                            if (!mobileNav.contains(e.target)) {
+                                document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(m => {
+                                    m.classList.remove('show');
+                                });
+                            }
+                        });
+                    }
                 }
 
                 // Debug: Log all click events to verify they're firing
@@ -1067,7 +1062,12 @@ ${message}
                 position: absolute !important;
                 bottom: 100% !important;
                 top: auto !important;
-                margin-bottom: 10px !important;
+                margin-bottom: 2px !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                min-width: 200px !important;
+                border-radius: 8px !important;
+                box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1) !important;
             }
         }
 
