@@ -148,7 +148,7 @@
                                     <div class="spinner-border spinner-border-sm text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
-                                    <span class="ms-2">Analyzing image...</span>
+                                    <span class="ms-2">Analyzing with OpenCV...</span>
                                 </div>
                                 <div id="ai-result" class="d-none">
                                     <p class="mb-1"><strong>Water Level:</strong> <span id="ai-water-level"
@@ -220,7 +220,7 @@
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2">Analysing...</p>
+                        <p class="mt-2">Analyzing with OpenCV...</p>
                     </div>
 
                     <div id="gauge-result" class="d-none">
@@ -905,12 +905,51 @@
                 const resultDiv = document.getElementById('gauge-result');
 
                 if (data.success && data.water_level !== null) {
+                    // Determine pipeline badge
+                    let pipelineBadge = '';
+                    let conditionBadges = '';
+
+                    if (data.method === 'opencv_adverse') {
+                        pipelineBadge = '<span class="badge bg-warning text-dark me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
+                    } else if (data.method === 'gemini') {
+                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
+                    } else if (data.method === 'gemini_fallback') {
+                        pipelineBadge = '<span class="badge bg-secondary me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
+                    }
+
+                    // Show detected conditions
+                    if (data.conditions) {
+                        if (data.conditions.is_night) {
+                            conditionBadges += '<span class="badge bg-dark me-1"><i class="bi bi-moon-fill"></i> Night</span>';
+                        }
+                        if (data.conditions.is_rainy) {
+                            conditionBadges += '<span class="badge bg-primary me-1"><i class="bi bi-cloud-rain"></i> Rain/Blur</span>';
+                        }
+                        if (data.conditions.is_far) {
+                            conditionBadges += '<span class="badge bg-secondary me-1"><i class="bi bi-binoculars"></i> Far</span>';
+                        }
+                    }
+
+                    // Processing time
+                    const processingTime = data.processing_time_ms ? `<small class="text-muted">(${data.processing_time_ms}ms)</small>` : '';
+
+                    // Voice fallback warning
+                    let voiceWarning = '';
+                    if (data.requires_voice_fallback) {
+                        voiceWarning = '<div class="alert alert-warning mt-2 mb-0 py-1 px-2"><small><i class="bi bi-mic"></i> Low confidence - consider voice + photo fallback</small></div>';
+                    }
+
                     resultDiv.innerHTML = `
                         <div class="alert alert-success">
-                            <h6><i class="bi bi-check-circle"></i> Reading Detected!</h6>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0"><i class="bi bi-check-circle"></i> Reading Detected!</h6>
+                                <div>${pipelineBadge}${processingTime}</div>
+                            </div>
+                            ${conditionBadges ? '<div class="mb-2">' + conditionBadges + '</div>' : ''}
                             <div class="display-4 text-center my-2">${data.water_level} m</div>
                             <small class="d-block text-center text-muted">Confidence: ${(data.confidence * 100).toFixed(0)}%</small>
                             <p class="mb-0 mt-2 small">${data.message || ''}</p>
+                            ${voiceWarning}
                         </div>
                     `;
 
@@ -926,10 +965,21 @@
                         gaugeModal.hide();
                     };
                 } else {
+                    // Error/failure display with pipeline info
+                    let pipelineBadge = '';
+                    if (data.method) {
+                        if (data.method === 'opencv_adverse') {
+                            pipelineBadge = '<span class="badge bg-warning text-dark"><i class="bi bi-cpu"></i> OpenCV</span> ';
+                        } else if (data.method === 'gemini') {
+                            pipelineBadge = '<span class="badge bg-info"><i class="bi bi-cpu"></i> OpenCV</span> ';
+                        }
+                    }
+
                     resultDiv.innerHTML = `
                         <div class="alert alert-warning">
-                            <h6><i class="bi bi-exclamation-triangle"></i> Could not read gauge</h6>
+                            <h6><i class="bi bi-exclamation-triangle"></i> Could not read gauge ${pipelineBadge}</h6>
                             <p class="mb-0">${data.message || data.error || 'Try moving closer or improving lighting.'}</p>
+                            ${data.requires_voice_fallback ? '<div class="mt-2"><small><i class="bi bi-mic"></i> Consider using voice + photo fallback</small></div>' : ''}
                         </div>
                     `;
                 }

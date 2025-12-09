@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h4 class="card-title mb-1"><i class="bi bi-water"></i> <span data-i18n="flood_synthesis">Flood
+                            Satellite Synthesis</span></h4>
+                    <p class="mb-0" data-i18n="flood_synthesis_desc">Hybrid Physics + AI-based flood visualization on
+                        satellite maps</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Control Panel -->
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-geo-alt"></i> <span data-i18n="location">Location</span></h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="bi bi-hand-index-thumb"></i> <small data-i18n="click_map_hint">Click on the map to
+                            select a location</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="latitude" class="form-label" data-i18n="latitude">Latitude</label>
+                        <input type="number" class="form-control" id="latitude" value="17.3850" step="0.0001">
+                    </div>
+                    <div class="mb-3">
+                        <label for="longitude" class="form-label" data-i18n="longitude">Longitude</label>
+                        <input type="number" class="form-control" id="longitude" value="78.4867" step="0.0001">
+                    </div>
+                    <div class="mb-3">
+                        <label for="waterLevelRise" class="form-label" data-i18n="water_level_rise">Water Level Rise
+                            (meters)</label>
+                        <input type="range" class="form-range" id="waterLevelRise" min="0.5" max="10" step="0.5"
+                            value="2">
+                        <div class="text-center"><span id="waterLevelValue">2.0</span> m</div>
+                    </div>
+                    <button id="generateBtn" class="btn btn-primary w-100">
+                        <i class="bi bi-play-fill"></i> <span data-i18n="generate_flood">Generate Flood
+                            Simulation</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-water"></i> <span data-i18n="indian_rivers">Indian Rivers</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group list-group-flush" id="scenarioList">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-bar-chart"></i> <span data-i18n="flood_statistics">Flood
+                            Statistics</span></h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="text-primary fs-4 fw-bold" id="statArea">--</div>
+                            <small class="text-muted" data-i18n="flooded_area">Flooded Area (km²)</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="text-warning fs-4 fw-bold" id="statPercent">--</div>
+                            <small class="text-muted" data-i18n="flooded_percent">Flooded %</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-danger fs-4 fw-bold" id="statMaxDepth">--</div>
+                            <small class="text-muted" data-i18n="max_depth">Max Depth (m)</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-info fs-4 fw-bold" id="statMeanDepth">--</div>
+                            <small class="text-muted" data-i18n="mean_depth">Mean Depth (m)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map/Visualization Panel -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-map"></i> <span data-i18n="satellite_map">Satellite Map with Flood
+                            Overlay</span></h6>
+                    <div>
+                        <span class="badge bg-secondary me-2" id="coordsDisplay">17.3850, 78.4867</span>
+                        <span class="badge bg-info" id="statusBadge" data-i18n="ready">Ready</span>
+                    </div>
+                </div>
+                <div class="card-body p-0 position-relative" style="height: 550px;">
+                    <div id="loadingOverlay"
+                        class="d-none position-absolute w-100 h-100 d-flex align-items-center justify-content-center"
+                        style="background: rgba(0,0,0,0.7); z-index: 1000;">
+                        <div class="text-center text-white">
+                            <div class="spinner-border text-primary mb-2" role="status"></div>
+                            <div data-i18n="running_simulation">Running physics simulation...</div>
+                        </div>
+                    </div>
+                    <!-- Leaflet Map Container -->
+                    <div id="floodMap" style="height: 100%; width: 100%; cursor: crosshair;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block scripts %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const latInput = document.getElementById('latitude');
+        const lonInput = document.getElementById('longitude');
+        const waterLevelSlider = document.getElementById('waterLevelRise');
+        const waterLevelValue = document.getElementById('waterLevelValue');
+        const generateBtn = document.getElementById('generateBtn');
+        const scenarioList = document.getElementById('scenarioList');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const statusBadge = document.getElementById('statusBadge');
+        const coordsDisplay = document.getElementById('coordsDisplay');
+
+        // Initialize Leaflet Map centered on India
+        const map = L.map('floodMap').setView([20.5937, 78.9629], 5);
+
+        // Add satellite tile layer (using ESRI World Imagery)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxZoom: 18
+        }).addTo(map);
+
+        // Add OpenStreetMap labels overlay
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            opacity: 0.3,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Flood overlay layer
+        let floodOverlay = null;
+        let locationMarker = null;
+        let riverMarkers = [];
+
+        // Update water level display
+        waterLevelSlider.addEventListener('input', function () {
+            waterLevelValue.textContent = parseFloat(this.value).toFixed(1);
+        });
+
+        // ==========================
+        // INTERACTIVE MAP CLICK
+        // ==========================
+        map.on('click', function (e) {
+            const lat = e.latlng.lat.toFixed(4);
+            const lon = e.latlng.lng.toFixed(4);
+
+            // Update inputs
+            latInput.value = lat;
+            lonInput.value = lon;
+
+            // Update coordinate display
+            coordsDisplay.textContent = `${lat}, ${lon}`;
+
+            // Update marker
+            if (locationMarker) {
+                locationMarker.setLatLng(e.latlng);
+            } else {
+                locationMarker = L.marker(e.latlng, {
+                    draggable: true
+                }).addTo(map);
+
+                // Allow dragging to update location
+                locationMarker.on('dragend', function (event) {
+                    const position = event.target.getLatLng();
+                    latInput.value = position.lat.toFixed(4);
+                    lonInput.value = position.lng.toFixed(4);
+                    coordsDisplay.textContent = `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`;
+                });
+            }
+
+            locationMarker.bindPopup(`
+                <strong>Selected Location</strong><br>
+                Lat: ${lat}<br>
+                Lon: ${lon}<br>
+                <button class="btn btn-sm btn-primary mt-2" onclick="document.getElementById('generateBtn').click()">
+                    Generate Flood
+                </button>
+            `).openPopup();
+        });
+
+        // Update map when coordinates change manually
+        function updateMapView() {
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                map.setView([lat, lon], 12);
+                coordsDisplay.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                if (locationMarker) {
+                    locationMarker.setLatLng([lat, lon]);
+                } else {
+                    locationMarker = L.marker([lat, lon], { draggable: true }).addTo(map);
+                    locationMarker.on('dragend', function (event) {
+                        const position = event.target.getLatLng();
+                        latInput.value = position.lat.toFixed(4);
+                        lonInput.value = position.lng.toFixed(4);
+                        coordsDisplay.textContent = `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`;
+                    });
+                }
+            }
+        }
+
+        latInput.addEventListener('change', updateMapView);
+        lonInput.addEventListener('change', updateMapView);
+
+        // Load river scenarios and add markers to map
+        async function loadScenarios() {
+            try {
+                const response = await fetch('/api/flood/demo');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Populate list
+                    scenarioList.innerHTML = data.scenarios.map(s => `
+                    <a href="#" class="list-group-item list-group-item-action scenario-item py-2" 
+                       data-lat="${s.lat}" data-lon="${s.lon}" data-id="${s.id}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="small">${s.name}</strong>
+                                <small class="d-block text-muted text-truncate" style="max-width: 200px;">${s.description}</small>
+                            </div>
+                            <i class="bi bi-water text-primary"></i>
+                        </div>
+                    </a>
+                `).join('');
+
+                    // Add river markers to map
+                    const riverIcon = L.divIcon({
+                        className: 'river-marker',
+                        html: '<i class="bi bi-water text-primary" style="font-size: 20px; text-shadow: 0 0 3px white;"></i>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+
+                    data.scenarios.forEach(s => {
+                        const marker = L.marker([s.lat, s.lon], { icon: riverIcon })
+                            .addTo(map)
+                            .bindPopup(`
+                                <strong>${s.name}</strong><br>
+                                <small>${s.description}</small><br>
+                                <button class="btn btn-sm btn-primary mt-2" 
+                                    onclick="selectRiver(${s.lat}, ${s.lon})">
+                                    Select & Simulate
+                                </button>
+                            `);
+                        riverMarkers.push(marker);
+                    });
+
+                    // Add click handlers to list items
+                    document.querySelectorAll('.scenario-item').forEach(item => {
+                        item.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            const lat = parseFloat(this.dataset.lat);
+                            const lon = parseFloat(this.dataset.lon);
+                            latInput.value = lat;
+                            lonInput.value = lon;
+                            map.setView([lat, lon], 12);
+                            coordsDisplay.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+                            if (locationMarker) {
+                                locationMarker.setLatLng([lat, lon]);
+                            } else {
+                                locationMarker = L.marker([lat, lon], { draggable: true }).addTo(map);
+                            }
+
+                            generateFlood();
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading scenarios:', error);
+            }
+        }
+
+        // Global function for marker popup button
+        window.selectRiver = function (lat, lon) {
+            latInput.value = lat;
+            lonInput.value = lon;
+            map.setView([lat, lon], 12);
+            coordsDisplay.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+            if (locationMarker) {
+                locationMarker.setLatLng([lat, lon]);
+            } else {
+                locationMarker = L.marker([lat, lon], { draggable: true }).addTo(map);
+            }
+
+            generateFlood();
+        };
+
+        // Generate flood visualization
+        async function generateFlood() {
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            const waterLevelRise = parseFloat(waterLevelSlider.value);
+
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Please enter valid coordinates or click on the map');
+                return;
+            }
+
+            // Show loading
+            loadingOverlay.classList.remove('d-none');
+            statusBadge.textContent = 'Generating...';
+            statusBadge.className = 'badge bg-warning';
+            generateBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/flood/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: lat,
+                        lon: lon,
+                        water_level_rise: waterLevelRise
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update map view
+                    map.setView([lat, lon], 13);
+
+                    // Remove old overlay if exists
+                    if (floodOverlay) {
+                        map.removeLayer(floodOverlay);
+                    }
+
+                    // Add flood image overlay on the map
+                    const bounds = data.overlay_bounds;
+                    const imageBounds = [
+                        [bounds.south, bounds.west],
+                        [bounds.north, bounds.east]
+                    ];
+
+                    floodOverlay = L.imageOverlay(
+                        'data:image/png;base64,' + data.image_base64,
+                        imageBounds,
+                        { opacity: 0.7 }
+                    ).addTo(map);
+
+                    // Update or create marker
+                    if (locationMarker) {
+                        locationMarker.setLatLng([lat, lon]);
+                        locationMarker.setPopupContent(`
+                            <strong>Flood Simulation Complete</strong><br>
+                            Location: ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
+                            Water Rise: ${waterLevelRise}m<br>
+                            Flooded Area: ${data.statistics.flooded_area_km2?.toFixed(2)} km²
+                        `);
+                        locationMarker.openPopup();
+                    }
+
+                    // Update statistics
+                    const stats = data.statistics;
+                    document.getElementById('statArea').textContent = stats.flooded_area_km2?.toFixed(2) || '--';
+                    document.getElementById('statPercent').textContent = stats.flooded_percentage?.toFixed(1) + '%' || '--';
+                    document.getElementById('statMaxDepth').textContent = stats.max_depth_m?.toFixed(1) || '--';
+                    document.getElementById('statMeanDepth').textContent = stats.mean_depth_m?.toFixed(1) || '--';
+
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.className = 'badge bg-success';
+                } else {
+                    throw new Error(data.error || 'Failed to generate flood visualization');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusBadge.textContent = 'Error';
+                statusBadge.className = 'badge bg-danger';
+                alert('Error: ' + error.message);
+            } finally {
+                loadingOverlay.classList.add('d-none');
+                generateBtn.disabled = false;
+            }
+        }
+
+        // Button click handler
+        generateBtn.addEventListener('click', generateFlood);
+
+        // Initialize
+        loadScenarios();
+    });
+</script>
+{% endblock %}

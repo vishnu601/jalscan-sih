@@ -5,8 +5,9 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-                <h2>Tamper Detection & Security</h2>
-                <p class="lead mb-0">Monitor and analyze submission integrity</p>
+                <h2 data-i18n="tamper_detection_security">Tamper Detection & Security</h2>
+                <p class="lead mb-0" data-i18n="monitor_submission_integrity">Monitor and analyze submission integrity
+                </p>
             </div>
             <div>
                 <select id="dateRange" class="form-select form-select-sm d-inline-block me-2" style="width: auto;"
@@ -18,10 +19,10 @@
                 </select>
                 <div class="btn-group">
                     <button class="btn btn-primary btn-sm" onclick="runBatchAnalysis()">
-                        <i class="bi bi-arrow-repeat"></i> Run Analysis
+                        <i class="bi bi-arrow-repeat"></i> <span data-i18n="run_analysis">Run Analysis</span>
                     </button>
                     <button class="btn btn-danger btn-sm disabled">
-                        <i class="bi bi-shield-lock-fill"></i> Security Active
+                        <i class="bi bi-shield-lock-fill"></i> <span data-i18n="security_active">Security Active</span>
                     </button>
                 </div>
             </div>
@@ -46,8 +47,9 @@
             <div class="card-body">
                 <div class="text-center">
                     <h3 class="card-title fw-bold text-primary" id="totalDetections">0</h3>
-                    <p class="card-text small text-uppercase fw-bold text-primary opacity-75">Total</p>
-                    <i class="bi bi-exclamation-triangle display-6 mt-2 text-primary opacity-50"></i>
+                    <p class="card-text small text-uppercase fw-bold text-primary opacity-75" data-i18n="total">Total
+                    </p>
+                    <i class="bi bi-exclamation-triangle display-6 mt-2 text-primary opacity-50"></i></i>
                 </div>
             </div>
         </div>

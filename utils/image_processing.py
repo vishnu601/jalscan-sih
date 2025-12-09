@@ -73,23 +73,45 @@ def analyze_water_gauge(image_path):
     try:
         genai.configure(api_key=api_key)
         
-        # Set up the model
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Use gemini-1.5-flash for vision tasks
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Load the image
         img = Image.open(image_path)
         
-        # Prompt for the model
-        prompt = """
-        Analyze this image of a water level gauge. 
-        Return a JSON object with the following fields:
-        - "water_level": The numeric value in meters (float). If not visible, use null.
-        - "confidence": A score from 0.0 to 1.0 indicating how sure you are.
-        - "is_valid": Boolean, true if the image clearly shows a water gauge, false if blurry or irrelevant.
-        - "reason": A short string explaining the result (e.g., "Clear reading", "Image too blurry", "No gauge found").
-        
-        Return ONLY the JSON string. No markdown formatting.
-        """
+        # Improved prompt for water gauge reading - MORE DETAILED
+        prompt = """You are an expert hydrologist who specializes in reading water level gauges accurately.
+
+TASK: Read the water level from this gauge image with precision.
+
+INSTRUCTIONS:
+1. Look carefully at the measuring stick/gauge in the image
+2. Find where the water surface meets the gauge
+3. Read the exact number marked at the water line
+4. The gauge usually has markings in meters or centimeters
+
+IMPORTANT GUIDELINES:
+- Look for painted numbers on the gauge staff (e.g., 1, 2, 3, 4, 5 meters)
+- Look for smaller subdivision marks between the main numbers
+- The water level is where the water surface intersects the gauge
+- If gauge shows cm, convert to meters (e.g., 250 cm = 2.50 meters)
+- Be precise - include decimals (e.g., 2.35 meters, not just 2 meters)
+
+OUTPUT: Return ONLY this JSON format with your reading:
+{
+    "water_level": 2.35,
+    "confidence": 0.85,
+    "is_valid": true,
+    "reason": "Clear reading at 2.35m mark on gauge"
+}
+
+NOTES:
+- water_level should be a decimal number in METERS (e.g., 2.35)
+- confidence should be between 0.0 and 1.0
+- is_valid should be true if you can see and read the gauge
+- reason should explain what you see
+
+Return ONLY the JSON, nothing else."""
         
         response = model.generate_content([prompt, img])
         text = response.text.strip()
@@ -97,6 +119,8 @@ def analyze_water_gauge(image_path):
         # Clean up potential markdown code blocks
         if text.startswith('```json'):
             text = text[7:]
+        elif text.startswith('```'):
+            text = text[3:]
         if text.endswith('```'):
             text = text[:-3]
         text = text.strip()
@@ -105,11 +129,22 @@ def analyze_water_gauge(image_path):
         
         try:
             result = json.loads(text)
+            # Ensure we have all required fields
+            if 'water_level' not in result:
+                result['water_level'] = None
+            if 'confidence' not in result:
+                result['confidence'] = 0.5
+            if 'is_valid' not in result:
+                result['is_valid'] = result.get('water_level') is not None
+            if 'reason' not in result:
+                result['reason'] = 'Analyzed with OpenCV'
             return result
-        except json.JSONDecodeError:
-            print(f"Could not parse AI response as JSON: {text}")
+        except json.JSONDecodeError as e:
+            print(f"Could not parse AI response as JSON: {text}, error: {e}")
             return None
             
     except Exception as e:
         print(f"Gemini API Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None

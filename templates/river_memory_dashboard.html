@@ -10,10 +10,10 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="fw-bold text-primary mb-1">
-                        <i class="bi bi-cpu me-2"></i>River Memory AI
+                        <i class="bi bi-cpu me-2"></i><span data-i18n="river_memory_ai_title">River Memory AI</span>
                     </h2>
-                    <p class="text-muted mb-0">Digital Twin for River Monitoring - India's First AI-Powered River Memory
-                        System</p>
+                    <p class="text-muted mb-0" data-i18n="river_memory_ai_desc">Digital Twin for River Monitoring -
+                        India's First AI-Powered River Memory System</p>
                 </div>
                 <div>
                     <select id="site-selector" class="form-select" onchange="loadSiteMemory()">
@@ -33,7 +33,7 @@
             <div class="card bg-primary text-white h-100">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-analyses">-</h4>
-                    <small>Total Analyses</small>
+                    <small data-i18n="total_analyses">Total Analyses</small>
                 </div>
             </div>
         </div>
@@ -41,7 +41,7 @@
             <div class="card bg-info text-white h-100">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-visibility">-%</h4>
-                    <small>Avg Gauge Visibility</small>
+                    <small data-i18n="avg_gauge_visibility">Avg Gauge Visibility</small>
                 </div>
             </div>
         </div>
@@ -49,7 +49,7 @@
             <div class="card bg-warning text-dark h-100">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-anomalies">-</h4>
-                    <small>Anomaly Rate</small>
+                    <small data-i18n="anomaly_rate">Anomaly Rate</small>
                 </div>
             </div>
         </div>
@@ -57,7 +57,7 @@
             <div class="card bg-success text-white h-100">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-sediment">-</h4>
-                    <small>Primary Sediment</small>
+                    <small data-i18n="primary_sediment">Primary Sediment</small>
                 </div>
             </div>
         </div>
@@ -65,7 +65,7 @@
             <div class="card bg-secondary text-white h-100">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-flow">-</h4>
-                    <small>Typical Flow</small>
+                    <small data-i18n="typical_flow">Typical Flow</small>
                 </div>
             </div>
         </div>
@@ -73,7 +73,7 @@
             <div class="card bg-danger text-white h-100" id="erosion-card">
                 <div class="card-body text-center py-3">
                     <h4 class="mb-0" id="stat-erosion">No</h4>
-                    <small>Erosion Detected</small>
+                    <small data-i18n="erosion_detected">Erosion Detected</small>
                 </div>
             </div>
         </div>
@@ -84,7 +84,8 @@
         <div class="col-lg-8 mb-4">
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>River Memory Timeline</h5>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i><span
+                            data-i18n="river_memory_timeline">River Memory Timeline</span></h5>
                     <div class="btn-group btn-group-sm" id="time-range-buttons">
                         <button class="btn btn-outline-primary active" onclick="setTimeRange(7)" disabled>7
                             Days</button>
@@ -128,38 +129,45 @@
             <!-- Alerts -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Active Alerts</h5>
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i><span
+                            data-i18n="active_alerts">Active Alerts</span></h5>
                 </div>
                 <div class="card-body" id="alerts-container">
-                    <p class="text-muted text-center py-3">No active alerts</p>
+                    <p class="text-muted text-center py-3" data-i18n="no_active_alerts">No active alerts</p>
                 </div>
             </div>
 
             <!-- Analysis Types Legend -->
             <div class="card shadow-sm">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>River Memory Metrics</h6>
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i><span data-i18n="river_memory_metrics">River
+                            Memory Metrics</span></h6>
                 </div>
                 <div class="card-body p-2">
                     <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
                         <span class="badge bg-primary me-2">💧</span>
-                        <small><strong>Water Color</strong> - Sediment & pollution detection</small>
+                        <small><strong data-i18n="water_color">Water Color</strong> - <span
+                                data-i18n="sediment_pollution">Sediment & pollution detection</span></small>
                     </div>
                     <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
                         <span class="badge bg-info me-2">🌊</span>
-                        <small><strong>Flow Speed</strong> - Surface texture analysis</small>
+                        <small><strong data-i18n="flow_speed">Flow Speed</strong> - <span
+                                data-i18n="surface_texture">Surface texture analysis</span></small>
                     </div>
                     <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
                         <span class="badge bg-secondary me-2">📏</span>
-                        <small><strong>Gauge Condition</strong> - Visibility & damage</small>
+                        <small><strong data-i18n="gauge_condition">Gauge Condition</strong> - <span
+                                data-i18n="visibility_damage">Visibility & damage</span></small>
                     </div>
                     <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
                         <span class="badge bg-warning me-2">⚠️</span>
-                        <small><strong>Anomalies</strong> - Unusual behavior detection</small>
+                        <small><strong data-i18n="anomalies">Anomalies</strong> - <span
+                                data-i18n="unusual_behavior">Unusual behavior detection</span></small>
                     </div>
                     <div class="d-flex align-items-center p-2 bg-light rounded">
                         <span class="badge bg-danger me-2">🏔️</span>
-                        <small><strong>Erosion</strong> - Riverbank change tracking</small>
+                        <small><strong data-i18n="erosion">Erosion</strong> - <span
+                                data-i18n="riverbank_change">Riverbank change tracking</span></small>
                     </div>
                 </div>
             </div>

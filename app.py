@@ -53,6 +53,10 @@ def create_app(config_name='default'):
     # Register blueprints
     app.register_blueprint(auth_bp)
     
+    # Register flood synthesis blueprint
+    from flood_synthesis.flood_api import flood_bp
+    app.register_blueprint(flood_bp)
+    
     # Initialize services
     sync_service = SyncService(app)
     tamper_engine = TamperDetectionEngine(app)  # Initialize tamper detection
@@ -1645,6 +1649,13 @@ def create_app(config_name='default'):
             db.session.add(submission)
             db.session.commit()
             
+            # Auto-append to CSV report
+            try:
+                from utils.csv_export import append_submission_to_csv
+                append_submission_to_csv(submission)
+            except Exception as csv_error:
+                logging.warning(f"CSV export failed: {csv_error}")
+            
             # Run tamper detection on new submission
             try:
                 tamper_engine.analyze_submission(submission)
@@ -1715,7 +1726,10 @@ def create_app(config_name='default'):
     @app.route('/api/analyze-gauge', methods=['POST'])
     @login_required
     def analyze_gauge():
-        """Endpoint to analyze a gauge image from base64 data (used by capture page)"""
+        """
+        Endpoint to analyze a gauge image from base64 data (used by capture page).
+        Uses hybrid detection: OpenCV for adverse conditions, Gemini for clean images.
+        """
         try:
             data = request.get_json()
             if not data or 'image_data' not in data:
@@ -1739,6 +1753,64 @@ def create_app(config_name='default'):
                 f.write(image_bytes)
             
             try:
+                # Use hybrid detection pipeline
+                from river_ai.water_level_detection import HybridWaterLevelDetector
+                
+                detector = HybridWaterLevelDetector()
+                result = detector.detect(filepath)
+                
+                # Log for demo/debugging
+                logging.info(f"Hybrid Detection Result: method={result.get('method')}, "
+                           f"water_level={result.get('water_level')}, "
+                           f"confidence={result.get('confidence')}")
+                
+                # Log preprocessing info if OpenCV was used
+                if 'preprocessing' in result:
+                    prep = result['preprocessing']
+                    logging.info(f"Preprocessing: steps={prep.get('pipeline_steps')}, "
+                               f"PSNR={prep.get('psnr_db')}dB, "
+                               f"time={prep.get('total_time_ms')}ms")
+                
+                # Log conditions detected
+                conditions = result.get('conditions', {})
+                if conditions.get('needs_preprocessing'):
+                    logging.info(f"Adverse conditions: night={conditions.get('is_night')}, "
+                               f"rain={conditions.get('is_rainy_blurry')}, "
+                               f"far={conditions.get('is_far')}")
+                
+                # Clean up temp file
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                
+                if result.get('water_level') is not None:
+                    return jsonify({
+                        'success': True,
+                        'water_level': result.get('water_level'),
+                        'confidence': result.get('confidence', 0),
+                        'is_valid': result.get('is_valid', False),
+                        'message': result.get('reason', ''),
+                        'method': result.get('method', 'unknown'),
+                        'requires_voice_fallback': result.get('requires_voice_fallback', False),
+                        'conditions': {
+                            'is_night': conditions.get('is_night', False),
+                            'is_rainy': conditions.get('is_rainy_blurry', False),
+                            'is_far': conditions.get('is_far', False)
+                        },
+                        'processing_time_ms': result.get('total_time_ms', 0)
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': result.get('error', 'Detection failed'),
+                        'water_level': None,
+                        'confidence': 0,
+                        'is_valid': False,
+                        'requires_voice_fallback': True
+                    })
+                    
+            except ImportError as e:
+                # Fallback to original Gemini-only method
+                logging.warning(f"Hybrid detector not available: {e}, using Gemini fallback")
                 from utils.image_processing import analyze_water_gauge
                 result = analyze_water_gauge(filepath)
                 
@@ -1752,7 +1824,8 @@ def create_app(config_name='default'):
                         'water_level': result.get('water_level'),
                         'confidence': result.get('confidence', 0),
                         'is_valid': result.get('is_valid', False),
-                        'message': result.get('reason', '')
+                        'message': result.get('reason', ''),
+                        'method': 'gemini_fallback'
                     })
                 else:
                     return jsonify({
@@ -1772,7 +1845,8 @@ def create_app(config_name='default'):
                     'error': str(e),
                     'water_level': None,
                     'confidence': 0,
-                    'is_valid': False
+                    'is_valid': False,
+                    'requires_voice_fallback': True
                 })
                 
         except Exception as e:
@@ -2840,6 +2914,12 @@ def create_app(config_name='default'):
     def flood_risk_dashboard():
         """Render Flood Risk Dashboard page with AI predictions"""
         return render_template('flood_risk_dashboard.html')
+
+    @app.route('/flood-synthesis')
+    @login_required
+    def flood_synthesis():
+        """Render Flood Synthesis page - Physics + AI flood visualization"""
+        return render_template('flood_synthesis.html')
 
     @app.route('/river-memory')
     @login_required
