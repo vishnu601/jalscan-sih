@@ -1042,6 +1042,25 @@
                         </div>`;
                     }
 
+                    // Scene validation warning (gauge not in water, etc.)
+                    let sceneWarning = '';
+                    if (data.scene_valid === false) {
+                        sceneWarning = `<div class="alert alert-danger mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-geo-alt-fill"></i> Invalid Scene Detected!</strong>
+                            <p class="mb-1 small">${data.scene_issue || 'The image does not show a valid water level gauge in a river/water body.'}</p>
+                            <small class="text-muted">The gauge must be physically installed in and partially submerged in water.</small>
+                        </div>`;
+                    }
+
+                    // No gauge detected warning
+                    let noGaugeWarning = '';
+                    if (data.no_gauge_detected) {
+                        noGaugeWarning = `<div class="alert alert-warning mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-search"></i> No Gauge Found!</strong>
+                            <p class="mb-0 small">No water level gauge/staff was detected in this image. Please point the camera at the measuring gauge.</p>
+                        </div>`;
+                    }
+
                     // Suggestions for failure case
                     let failSuggestions = '';
                     if (data.suggestions && data.suggestions.length > 0) {
@@ -1064,12 +1083,28 @@
                         </div>`;
                     }
 
+                    // Determine error type for styling
+                    let alertClass = 'alert-warning';
+                    let errorTitle = 'Could not read gauge';
+                    if (data.tamper_detected) {
+                        alertClass = 'alert-danger';
+                        errorTitle = 'Cannot Accept Image';
+                    } else if (data.scene_valid === false) {
+                        alertClass = 'alert-danger';
+                        errorTitle = 'Invalid Scene';
+                    } else if (data.no_gauge_detected) {
+                        alertClass = 'alert-warning';
+                        errorTitle = 'No Gauge Found';
+                    }
+
                     resultDiv.innerHTML = `
-                        <div class="alert ${data.tamper_detected ? 'alert-danger' : 'alert-warning'}">
-                            <h6><i class="bi bi-exclamation-triangle"></i> ${data.tamper_detected ? 'Cannot Accept Image' : 'Could not read gauge'} ${pipelineBadge}</h6>
+                        <div class="alert ${alertClass}">
+                            <h6><i class="bi bi-exclamation-triangle"></i> ${errorTitle} ${pipelineBadge}</h6>
                             <p class="mb-0">${data.reason || data.message || data.error || 'Unable to detect water level from this image.'}</p>
                             ${data.requires_voice_fallback ? '<div class="mt-2"><small><i class="bi bi-mic"></i> Consider using voice + photo fallback</small></div>' : ''}
                         </div>
+                        ${sceneWarning}
+                        ${noGaugeWarning}
                         ${tamperWarningError}
                         ${failSuggestions}
                     `;

@@ -69,7 +69,7 @@ class GeminiWaterLevelDetector:
     
     def _analyze_with_gemini(self, image_path: str) -> Dict:
         """
-        Send image to Gemini AI for water level analysis with tamper detection.
+        Send image to Gemini AI for water level analysis with scene validation and tamper detection.
         """
         try:
             from utils.image_processing import analyze_water_gauge
@@ -77,6 +77,10 @@ class GeminiWaterLevelDetector:
             result = analyze_water_gauge(image_path)
             
             if result:
+                # Check scene validation first
+                scene_valid = result.get('scene_valid', True)
+                no_gauge = result.get('no_gauge_detected', False)
+                
                 # Check for tamper detection
                 tamper_detected = result.get('tamper_detected', False)
                 
@@ -85,15 +89,46 @@ class GeminiWaterLevelDetector:
                     'water_level': result.get('water_level'),
                     'confidence': result.get('confidence', 0.0),
                     'is_valid': result.get('is_valid', False),
-                    'reason': result.get('reason', 'Gemini AI analysis'),
-                    # New enhanced fields
+                    'reason': result.get('reason', 'OpenCV analysis'),
+                    # Scene validation fields
+                    'scene_valid': scene_valid,
+                    'scene_issue': result.get('scene_issue'),
+                    'no_gauge_detected': no_gauge,
+                    # Enhanced fields
                     'gauge_location': result.get('gauge_location', 'Not detected'),
                     'water_line_position': result.get('water_line_position', 'Not detected'),
+                    'visible_markers': result.get('visible_markers', []),
+                    'scale_direction': result.get('scale_direction'),
+                    'reasoning': result.get('reasoning'),
                     'tamper_detected': tamper_detected,
                     'tamper_reason': result.get('tamper_reason'),
                     'image_quality': result.get('image_quality', 'unknown'),
                     'suggestions': result.get('suggestions', [])
                 }
+                
+                # Handle invalid scene (gauge not in water, etc.)
+                if not scene_valid:
+                    response['is_valid'] = False
+                    response['water_level'] = None
+                    scene_issue = result.get('scene_issue', 'Invalid scene detected')
+                    response['reason'] = f"Scene validation failed: {scene_issue}"
+                    if not response['suggestions']:
+                        response['suggestions'] = [
+                            "Ensure the gauge is physically installed in water",
+                            "Take a photo of the actual gauge at the river site",
+                            "The gauge must be partially submerged in water"
+                        ]
+                
+                # Handle no gauge detected
+                if no_gauge:
+                    response['is_valid'] = False
+                    response['water_level'] = None
+                    response['reason'] = "No water level gauge detected in this image"
+                    response['suggestions'] = [
+                        "Point the camera at the water level gauge/staff",
+                        "Ensure the gauge numbers are visible",
+                        "Move closer if the gauge is too far away"
+                    ]
                 
                 # If tampered, mark as invalid and adjust reason
                 if tamper_detected:
@@ -112,16 +147,16 @@ class GeminiWaterLevelDetector:
                     'water_level': None,
                     'confidence': 0.0,
                     'is_valid': False,
-                    'reason': 'Gemini returned no result',
-                    'suggestions': ['Try taking the photo again with better lighting']
+                    'reason': 'OpenCV is taking too long to process. Please try again.',
+                    'suggestions': ['Try taking the photo again with better lighting', 'Ensure the gauge is clearly visible']
                 }
                 
         except ImportError as e:
-            logger.error(f"Gemini import error: {e}")
-            return self._error_result("Gemini API not available")
+            logger.error(f"OpenCV import error: {e}")
+            return self._error_result("OpenCV processing unavailable")
         except Exception as e:
-            logger.error(f"Gemini analysis error: {e}")
-            return self._error_result(str(e))
+            logger.error(f"OpenCV analysis error: {e}")
+            return self._error_result(f"OpenCV processing error: Please try again")
     
     def _error_result(self, message: str) -> Dict:
         """Create a standardized error result."""
