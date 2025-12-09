@@ -493,56 +493,17 @@
         </div>
     </nav>
 
-    <!-- Install App Banner (Sticky at top) -->
-    <div id="installBanner" class="alert alert-primary alert-dismissible fade show d-none"
-        style="position: fixed; top: 0; left: 0; right: 0; z-index: 9999; border-radius: 0; margin: 0; display: flex !important; align-items: center; justify-content: center; gap: 15px; padding: 12px 20px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="/static/icons/icon-192.png" alt="JalScan" style="width: 40px; height: 40px; border-radius: 8px;">
-            <div>
-                <strong>Install JalScan</strong>
-                <small class="d-block text-muted">Works offline! Take readings anywhere.</small>
+    <!-- Install App Toast (Small, bottom right) -->
+    <div id="installToast" class="d-none"
+        style="position: fixed; bottom: 90px; right: 20px; z-index: 1050; background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%); color: white; padding: 12px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); max-width: 280px; cursor: pointer;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="bi bi-download" style="font-size: 1.5rem;"></i>
+            <div style="flex: 1;">
+                <strong style="font-size: 0.9rem;">Install App</strong>
+                <small class="d-block" style="opacity: 0.9; font-size: 0.75rem;">Works offline</small>
             </div>
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="installBannerBtn">
-            <i class="bi bi-download"></i> Install
-        </button>
-        <button type="button" class="btn-close" id="dismissBanner" aria-label="Close"></button>
-    </div>
-
-    <!-- Install App Prompt Modal -->
-    <div class="modal fade" id="installPrompt" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">
-                        <i class="bi bi-phone"></i> Install JalScan App
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center py-4">
-                    <img src="/static/icons/icon-192.png" alt="JalScan"
-                        style="width: 80px; height: 80px; border-radius: 16px; margin-bottom: 20px;">
-                    <h5>Get the Full App Experience!</h5>
-                    <p class="text-muted">Install JalScan on your device for:</p>
-                    <div class="row text-start mt-3">
-                        <div class="col-6">
-                            <p class="mb-2"><i class="bi bi-wifi-off text-primary"></i> Works <strong>offline</strong>
-                            </p>
-                            <p class="mb-2"><i class="bi bi-lightning text-warning"></i> Faster loading</p>
-                        </div>
-                        <div class="col-6">
-                            <p class="mb-2"><i class="bi bi-house text-success"></i> Home screen access</p>
-                            <p class="mb-2"><i class="bi bi-bell text-danger"></i> Push notifications</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Maybe Later</button>
-                    <button type="button" class="btn btn-primary btn-lg" id="installBtn">
-                        <i class="bi bi-download"></i> Install Now
-                    </button>
-                </div>
-            </div>
+            <button type="button" class="btn-close btn-close-white btn-sm" id="dismissToast" aria-label="Close"
+                style="opacity: 0.8;"></button>
         </div>
     </div>
 
@@ -550,123 +511,66 @@
 
     <!-- Global JavaScript -->
     <script>
-        // PWA Install Prompt
+        // PWA Install Prompt - Simplified Toast Version
         let deferredPrompt = null;
-        const installPromptModal = new bootstrap.Modal(document.getElementById('installPrompt'));
-        const installBanner = document.getElementById('installBanner');
+        const installToast = document.getElementById('installToast');
 
         // Detect iOS Safari
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
         const isIOSSafari = isIOS && isSafari;
 
-        console.log('[PWA] iOS:', isIOS, 'Safari:', isSafari, 'iOS Safari:', isIOSSafari);
-
         window.addEventListener('beforeinstallprompt', (e) => {
             console.log('[PWA] beforeinstallprompt fired!');
-            // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
-            // Stash the event so it can be triggered later
             deferredPrompt = e;
 
-            // Check if user dismissed before (localStorage)
+            // Check if user dismissed before
             const dismissed = localStorage.getItem('pwaInstallDismissed');
             const dismissedTime = localStorage.getItem('pwaInstallDismissedTime');
             const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
 
-            // Show banner if not dismissed or dismissed more than a day ago
+            // Show toast after 3 seconds if not dismissed recently
             if (!isAppInstalled() && (!dismissed || (dismissedTime && parseInt(dismissedTime) < oneDayAgo))) {
-                // Show banner immediately
-                if (installBanner) {
-                    installBanner.classList.remove('d-none');
-                    console.log('[PWA] Showing install banner');
-                }
-
-                // Show modal after 15 seconds if banner dismissed
                 setTimeout(() => {
-                    if (deferredPrompt && !isAppInstalled() && installBanner && installBanner.classList.contains('d-none')) {
-                        installPromptModal.show();
+                    if (installToast && deferredPrompt) {
+                        installToast.classList.remove('d-none');
                     }
-                }, 15000);
+                }, 3000);
             }
         });
 
-        // For iOS Safari, show banner with manual instructions
-        if (isIOSSafari && !isAppInstalled()) {
-            console.log('[PWA] iOS Safari detected, showing manual install banner');
-            setTimeout(() => {
-                const dismissed = localStorage.getItem('pwaInstallDismissed');
-                if (!dismissed && installBanner) {
-                    // Change banner text for iOS
-                    const msgDiv = installBanner.querySelector('small');
-                    if (msgDiv) {
-                        msgDiv.textContent = 'Tap Share ↑ then "Add to Home Screen"';
-                    }
-                    installBanner.classList.remove('d-none');
+        // Click on toast to install
+        if (installToast) {
+            installToast.addEventListener('click', async (e) => {
+                if (e.target.id === 'dismissToast' || e.target.closest('#dismissToast')) {
+                    // Dismiss clicked
+                    installToast.classList.add('d-none');
+                    localStorage.setItem('pwaInstallDismissed', 'true');
+                    localStorage.setItem('pwaInstallDismissedTime', Date.now().toString());
+                    return;
                 }
-            }, 2000);
-        }
 
-        // Install button in modal
-        document.getElementById('installBtn').addEventListener('click', async () => {
-            await triggerInstall();
-        });
-
-        // Install button in banner
-        if (document.getElementById('installBannerBtn')) {
-            document.getElementById('installBannerBtn').addEventListener('click', async () => {
+                // Install clicked
                 await triggerInstall();
             });
         }
 
-        // Dismiss banner
-        if (document.getElementById('dismissBanner')) {
-            document.getElementById('dismissBanner').addEventListener('click', () => {
-                if (installBanner) installBanner.classList.add('d-none');
-                localStorage.setItem('pwaInstallDismissed', 'true');
-                localStorage.setItem('pwaInstallDismissedTime', Date.now().toString());
-            });
-        }
-
         async function triggerInstall() {
-            console.log('[PWA] triggerInstall called, deferredPrompt:', !!deferredPrompt);
-
             if (deferredPrompt) {
                 try {
                     deferredPrompt.prompt();
                     const { outcome } = await deferredPrompt.userChoice;
-                    console.log('[PWA] User choice:', outcome);
                     if (outcome === 'accepted') {
-                        console.log('[PWA] User accepted the install prompt');
-                        if (installBanner) installBanner.classList.add('d-none');
+                        console.log('[PWA] User accepted install');
+                        if (installToast) installToast.classList.add('d-none');
                     }
                     deferredPrompt = null;
-                    installPromptModal.hide();
                 } catch (err) {
                     console.error('[PWA] Install error:', err);
-                    showManualInstallInstructions();
                 }
-            } else {
-                // No deferred prompt - show manual instructions
-                console.log('[PWA] No deferredPrompt, showing manual instructions');
-                showManualInstallInstructions();
             }
-        }
-
-        function showManualInstallInstructions() {
-            installPromptModal.hide();
-            if (installBanner) installBanner.classList.add('d-none');
-
-            let instructions = '';
-            if (isIOS) {
-                instructions = '📱 To install on iOS:\n\n1. Tap the Share button (square with arrow)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" to confirm';
-            } else if (/Android/.test(navigator.userAgent)) {
-                instructions = '📱 To install on Android:\n\n1. Tap the menu (⋮) in your browser\n2. Tap "Add to Home Screen" or "Install App"\n3. Confirm the installation';
-            } else {
-                instructions = '💻 To install:\n\n1. Click the install icon in your browser\'s address bar\n2. Or use your browser\'s menu to "Install App"';
-            }
-
-            alert(instructions);
+            if (installToast) installToast.classList.add('d-none');
         }
 
         function isAppInstalled() {
