@@ -655,19 +655,57 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def analytics():
-        """Analytics dashboard"""
+        """Analytics dashboard - filtered by role"""
+        # Determine sites to filter by
+        analyst_site_ids = None
+        if current_user.role == 'central_analyst':
+            analyst_site_ids = get_analyst_site_ids() or []
+        
+        # Helper to apply site filter
+        def apply_site_filter(query, model_site_id_col):
+            if analyst_site_ids is not None:
+                if not analyst_site_ids: # Analyst with no sites
+                    return query.filter(db.literal(False))
+                return query.filter(model_site_id_col.in_(analyst_site_ids))
+            return query
+
         # Get analytics data
-        total_submissions = WaterLevelSubmission.query.count()
-        total_sites = MonitoringSite.query.filter_by(is_active=True).count()
-        total_users = User.query.filter_by(is_active=True).count()
+        # Total Submissions
+        sub_query = WaterLevelSubmission.query
+        sub_query = apply_site_filter(sub_query, WaterLevelSubmission.site_id)
+        total_submissions = sub_query.count()
+
+        # Total Sites
+        site_query = MonitoringSite.query.filter_by(is_active=True)
+        if analyst_site_ids is not None:
+             if not analyst_site_ids:
+                 site_query = site_query.filter(db.literal(False))
+             else:
+                 site_query = site_query.filter(MonitoringSite.id.in_(analyst_site_ids))
+        total_sites = site_query.count()
+        
+        # Total Users (Active users who have submitted to these sites, or all users for admin)
+        if analyst_site_ids is not None:
+             # For analysts, show only users who contributed to their accessible sites
+             if not analyst_site_ids:
+                 total_users = 0
+             else:
+                 total_users = db.session.query(User.id).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id).filter(
+                     WaterLevelSubmission.site_id.in_(analyst_site_ids),
+                     User.is_active == True
+                 ).distinct().count()
+        else:
+             total_users = User.query.filter_by(is_active=True).count()
         
         # Recent activity
-        recent_submissions = WaterLevelSubmission.query.order_by(
+        recent_query = WaterLevelSubmission.query
+        recent_query = apply_site_filter(recent_query, WaterLevelSubmission.site_id)
+        recent_submissions = recent_query.order_by(
             WaterLevelSubmission.timestamp.desc()
         ).limit(20).all()
         
         # Enhanced site statistics with more data
-        sites_with_data = db.session.query(
+        sites_query = db.session.query(
             MonitoringSite.id,
             MonitoringSite.name,
             MonitoringSite.river_basin,
@@ -675,18 +713,38 @@ def create_app(config_name='default'):
             db.func.count(WaterLevelSubmission.id).label('submission_count'),
             db.func.avg(WaterLevelSubmission.water_level).label('avg_water_level'),
             db.func.avg(WaterLevelSubmission.quality_rating).label('quality_score')
-        ).join(WaterLevelSubmission, MonitoringSite.id == WaterLevelSubmission.site_id).group_by(MonitoringSite.id).all()
+        ).join(WaterLevelSubmission, MonitoringSite.id == WaterLevelSubmission.site_id)
+        
+        # Filter sites in the join/group query
+        if analyst_site_ids is not None:
+            if not analyst_site_ids:
+                 sites_with_data = [] # No sites
+            else:
+                 sites_query = sites_query.filter(MonitoringSite.id.in_(analyst_site_ids))
+                 sites_with_data = sites_query.group_by(MonitoringSite.id).all()
+        else:
+            sites_with_data = sites_query.group_by(MonitoringSite.id).all()
+
         
         # Enhanced user statistics
-        user_stats = db.session.query(
+        user_stats_query = db.session.query(
             User.username,
             User.role,
             db.func.count(WaterLevelSubmission.id).label('submission_count')
-        ).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id).group_by(User.id).all()
+        ).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id)
+        
+        user_stats_query = apply_site_filter(user_stats_query, WaterLevelSubmission.site_id)
+        user_stats = user_stats_query.group_by(User.id).all()
         
         # Calculate average water level and quality score
-        avg_water_level = db.session.query(db.func.avg(WaterLevelSubmission.water_level)).scalar() or 0
-        quality_score = db.session.query(db.func.avg(WaterLevelSubmission.quality_rating)).scalar() or 0
+        avg_wl_query = db.session.query(db.func.avg(WaterLevelSubmission.water_level))
+        avg_wl_query = apply_site_filter(avg_wl_query, WaterLevelSubmission.site_id)
+        avg_water_level = avg_wl_query.scalar() or 0
+
+        qs_query = db.session.query(db.func.avg(WaterLevelSubmission.quality_rating))
+        qs_query = apply_site_filter(qs_query, WaterLevelSubmission.site_id)
+        quality_score = qs_query.scalar() or 0
+
         quality_score = (quality_score / 5) * 100  # Convert to percentage
         
         return render_template('analytics.html',
@@ -703,11 +761,18 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def submissions_by_date():
-        """API for submissions by date chart"""
+        """API for submissions by date chart - filtered by role"""
         try:
             # Get days parameter with default 30 days
             days = request.args.get('days', 30, type=int)
             site_id = request.args.get('site_id', type=int)
+            
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'labels': [], 'data': []})
             
             # Calculate date range
             end_date = datetime.utcnow()
@@ -719,8 +784,16 @@ def create_app(config_name='default'):
                 db.func.count(WaterLevelSubmission.id).label('count')
             ).filter(WaterLevelSubmission.timestamp >= start_date)
             
-            # Filter by site if specified
+            # Apply role-based site filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+            
+            # Filter by site if specified (and allowed)
             if site_id and site_id != 'all':
+                # If analyst, verify they have access to this site
+                if analyst_site_ids is not None and site_id not in analyst_site_ids:
+                     # Access denied to this specific site, return empty
+                     return jsonify({'labels': [], 'data': []})
                 query = query.filter(WaterLevelSubmission.site_id == site_id)
             
             # Execute query
@@ -749,20 +822,33 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def water_level_trends():
-        """API for water level trends chart"""
+        """API for water level trends chart - filtered by role"""
         try:
             days = request.args.get('days', 30, type=int)
             end_date = datetime.utcnow()
             start_date = end_date - timedelta(days=days)
             
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'labels': [], 'datasets': []})
+            
             # Get average water level by date and site
-            trends_data = db.session.query(
+            query = db.session.query(
                 db.func.date(WaterLevelSubmission.timestamp).label('date'),
                 MonitoringSite.name.label('site_name'),
                 db.func.avg(WaterLevelSubmission.water_level).label('avg_level')
             ).join(MonitoringSite).filter(
                 WaterLevelSubmission.timestamp >= start_date
-            ).group_by(
+            )
+            
+            # Apply role-based filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+            
+            trends_data = query.group_by(
                 db.func.date(WaterLevelSubmission.timestamp),
                 MonitoringSite.name
             ).order_by('date').all()
@@ -807,12 +893,25 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def submissions_by_site():
-        """API for submissions by site (pie chart)"""
+        """API for submissions by site (pie chart) - filtered by role"""
         try:
-            site_counts = db.session.query(
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'labels': [], 'data': [], 'backgroundColor': []})
+
+            query = db.session.query(
                 MonitoringSite.name,
                 db.func.count(WaterLevelSubmission.id).label('count')
-            ).join(WaterLevelSubmission).group_by(MonitoringSite.id).order_by(db.desc('count')).all()
+            ).join(WaterLevelSubmission)
+            
+            # Apply role-based filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+                
+            site_counts = query.group_by(MonitoringSite.id).order_by(db.desc('count')).all()
             
             labels = [site.name for site in site_counts]
             data = [site.count for site in site_counts]
@@ -835,12 +934,25 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def user_activity():
-        """API for user activity chart"""
+        """API for user activity chart - filtered by role"""
         try:
-            user_stats = db.session.query(
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'labels': [], 'data': []})
+
+            query = db.session.query(
                 User.username,
                 db.func.count(WaterLevelSubmission.id).label('submission_count')
-            ).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id).group_by(User.id).order_by(db.desc('submission_count')).limit(10).all()
+            ).join(WaterLevelSubmission, User.id == WaterLevelSubmission.user_id)
+            
+            # Apply role-based filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+            
+            user_stats = query.group_by(User.id).order_by(db.desc('submission_count')).limit(10).all()
             
             labels = [user.username for user in user_stats]
             data = [user.submission_count for user in user_stats]
@@ -857,13 +969,25 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def quality_metrics():
-        """API for quality metrics chart"""
+        """API for quality metrics chart - filtered by role"""
         try:
-            # Get quality rating distribution
-            quality_counts = db.session.query(
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'labels': ['★', '★★', '★★★', '★★★★', '★★★★★'], 'data': [0,0,0,0,0]})
+
+            query = db.session.query(
                 WaterLevelSubmission.quality_rating,
                 db.func.count(WaterLevelSubmission.id).label('count')
-            ).filter(WaterLevelSubmission.quality_rating.isnot(None)).group_by(WaterLevelSubmission.quality_rating).all()
+            ).filter(WaterLevelSubmission.quality_rating.isnot(None))
+            
+            # Apply role-based filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+                
+            quality_counts = query.group_by(WaterLevelSubmission.quality_rating).all()
             
             # Initialize data for ratings 1-5
             data = [0, 0, 0, 0, 0]
@@ -885,10 +1009,26 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def analytics_statistics():
-        """API for real-time statistics"""
+        """API for real-time statistics - filtered by role"""
         try:
-            avg_water_level = db.session.query(db.func.avg(WaterLevelSubmission.water_level)).scalar() or 0
-            quality_score = db.session.query(db.func.avg(WaterLevelSubmission.quality_rating)).scalar() or 0
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'avg_water_level': 0, 'quality_score': 0})
+
+            # Queries
+            avg_wl_query = db.session.query(db.func.avg(WaterLevelSubmission.water_level))
+            qs_query = db.session.query(db.func.avg(WaterLevelSubmission.quality_rating))
+            
+            # Apply filter
+            if analyst_site_ids is not None:
+                avg_wl_query = avg_wl_query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+                qs_query = qs_query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+            
+            avg_water_level = avg_wl_query.scalar() or 0
+            quality_score = qs_query.scalar() or 0
             quality_score = (quality_score / 5) * 100  # Convert to percentage
             
             return jsonify({
@@ -903,14 +1043,27 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['central_analyst', 'supervisor', 'admin'])
     def site_performance():
-        """API for site performance data"""
+        """API for site performance data - filtered by role"""
         try:
-            site_performance_data = db.session.query(
+            # Role-based filtering
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'site_performance': []})
+
+            query = db.session.query(
                 MonitoringSite.id,
                 MonitoringSite.name,
                 db.func.avg(WaterLevelSubmission.water_level).label('avg_water_level'),
                 db.func.avg(WaterLevelSubmission.quality_rating).label('quality_score')
-            ).join(WaterLevelSubmission).group_by(MonitoringSite.id).all()
+            ).join(WaterLevelSubmission)
+            
+            # Apply role-based filter
+            if analyst_site_ids is not None:
+                query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+            
+            site_performance_data = query.group_by(MonitoringSite.id).all()
             
             performance_list = []
             for site in site_performance_data:
@@ -930,7 +1083,7 @@ def create_app(config_name='default'):
     # Cloud Dashboard Routes (Supervisor and above) - FIXED VERSIONS
     @app.route('/cloud-dashboard')
     @login_required
-    @role_required(['supervisor', 'admin', 'central_analyst'])
+    @role_required(['supervisor', 'admin']) # Removed central_analyst
     def cloud_dashboard():
         """Cloud monitoring dashboard for supervisors"""
         return render_template('cloud_dashboard.html')
@@ -3057,13 +3210,28 @@ def create_app(config_name='default'):
     @login_required
     def river_memory_dashboard():
         """Render River Memory AI Dashboard - Digital Twin"""
-        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        query = MonitoringSite.query.filter_by(is_active=True)
+        
+        # Filter sites for analyst
+        if current_user.role == 'central_analyst':
+            analyst_site_ids = get_analyst_site_ids() or []
+            if not analyst_site_ids:
+                sites = []
+            else:
+                sites = query.filter(MonitoringSite.id.in_(analyst_site_ids)).all()
+        else:
+            sites = query.all()
+            
         return render_template('river_memory_dashboard.html', sites=sites)
 
     @app.route('/api/river-memory/site/<int:site_id>')
     @login_required
     def get_river_memory(site_id):
         """Get River Memory data for a site"""
+        # Access Control
+        if current_user.role == 'central_analyst':
+            if not is_site_assigned_to_analyst(site_id):
+                return jsonify({'success': False, 'error': 'Access denied to this site'}), 403
         try:
             from services.river_memory_ai import river_memory_ai
             from models import RiverAnalysis
@@ -3097,6 +3265,12 @@ def create_app(config_name='default'):
         try:
             from services.river_memory_ai import analyze_submission
             
+            # Access Check
+            if current_user.role == 'central_analyst':
+                submission = WaterLevelSubmission.query.get(submission_id)
+                if not submission or not is_site_assigned_to_analyst(submission.site_id):
+                     return jsonify({'success': False, 'error': 'Access denied to this submission'}), 403
+            
             result = analyze_submission(submission_id)
             
             return jsonify({
@@ -3112,6 +3286,10 @@ def create_app(config_name='default'):
     @login_required
     def get_river_timeline(site_id):
         """Get analysis timeline for visualization"""
+        # Access Control
+        if current_user.role == 'central_analyst':
+            if not is_site_assigned_to_analyst(site_id):
+                return jsonify({'success': False, 'error': 'Access denied to this site'}), 403
         try:
             from models import RiverAnalysis
             
@@ -3377,16 +3555,10 @@ def create_app(config_name='default'):
     # === FLOOD RISK PREDICTION API ===
     
     @app.route('/api/flood-risk/predict', methods=['POST'])
+    @login_required
     def flood_risk_predict():
         """
         ML-based flood risk prediction for a monitoring site.
-        
-        Request Body:
-            monitoring_site_id: int (required)
-            timestamp: ISO datetime string (optional, default: now)
-            
-        Returns:
-            risk_category, risk_score, confidence, explanations, recommendations
         """
         try:
             from ml.model_inference import get_predictor
@@ -3397,6 +3569,11 @@ def create_app(config_name='default'):
             site_id = data.get('monitoring_site_id')
             if not site_id:
                 return jsonify({'success': False, 'error': 'monitoring_site_id is required'}), 400
+                
+            # Access Control
+            if current_user.role == 'central_analyst':
+                if not is_site_assigned_to_analyst(int(site_id)):
+                     return jsonify({'success': False, 'error': 'Access denied to this site'}), 403
             
             # Parse optional timestamp
             timestamp = None
@@ -3447,8 +3624,13 @@ def create_app(config_name='default'):
             return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/flood-risk/site/<int:site_id>')
+    @login_required
     def flood_risk_site(site_id):
         """Get current flood risk for a specific site"""
+        # Access Control
+        if current_user.role == 'central_analyst':
+            if not is_site_assigned_to_analyst(site_id):
+                return jsonify({'success': False, 'error': 'Access denied to this site'}), 403
         try:
             from ml.model_inference import get_predictor
             from ml.schemas import PredictionRequest
@@ -3467,6 +3649,7 @@ def create_app(config_name='default'):
             return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/flood-risk/all-sites')
+    @login_required
     def flood_risk_all_sites():
         """Get flood risk for all active monitoring sites"""
         try:
@@ -3474,6 +3657,17 @@ def create_app(config_name='default'):
             
             predictor = get_predictor()
             results = predictor.get_all_site_risks()
+            
+            # Filter for analysts
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                filtered_results = []
+                for res in results:
+                    # Depending on structure of results. Assuming it has site_id or id
+                    s_id = res.get('site_id') or res.get('id')
+                    if s_id and s_id in analyst_site_ids:
+                        filtered_results.append(res)
+                results = filtered_results
             
             return jsonify({
                 'success': True,
@@ -3487,8 +3681,13 @@ def create_app(config_name='default'):
             return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/flood-risk/history/<int:site_id>')
+    @login_required
     def flood_risk_history(site_id):
         """Get prediction history for a site"""
+        # Access Control
+        if current_user.role == 'central_analyst':
+            if not is_site_assigned_to_analyst(site_id):
+                return jsonify({'success': False, 'error': 'Access denied to this site'}), 403
         try:
             from models import FloodRiskPrediction
             
