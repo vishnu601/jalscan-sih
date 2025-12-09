@@ -937,17 +937,62 @@
                         voiceWarning = '<div class="alert alert-warning mt-2 mb-0 py-1 px-2"><small><i class="bi bi-mic"></i> Low confidence - consider voice + photo fallback</small></div>';
                     }
 
+                    // Tamper detection warning
+                    let tamperWarning = '';
+                    if (data.tamper_detected) {
+                        tamperWarning = `<div class="alert alert-danger mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-shield-exclamation"></i> Tamper Detected!</strong>
+                            <p class="mb-0 small">${data.tamper_reason || 'This image appears to have been altered or manipulated.'}</p>
+                        </div>`;
+                    }
+
+                    // Suggestions for better images
+                    let suggestionsHtml = '';
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        suggestionsHtml = `<div class="alert alert-info mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-lightbulb"></i> Tips for better reading:</strong>
+                            <ul class="mb-0 ps-3 mt-1 small">
+                                ${data.suggestions.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                    }
+
+                    // Image quality badge
+                    let qualityBadge = '';
+                    const quality = data.image_quality || 'unknown';
+                    const qualityColors = {
+                        'excellent': 'success',
+                        'good': 'info',
+                        'fair': 'warning',
+                        'poor': 'danger',
+                        'unusable': 'dark',
+                        'unknown': 'secondary'
+                    };
+                    qualityBadge = `<span class="badge bg-${qualityColors[quality] || 'secondary'} ms-1">${quality}</span>`;
+
+                    // Gauge location info
+                    let gaugeInfo = '';
+                    if (data.gauge_location || data.water_line_position) {
+                        gaugeInfo = `<div class="small text-muted mt-2 border-top pt-2">
+                            ${data.gauge_location ? `<div><i class="bi bi-geo-alt"></i> <strong>Gauge:</strong> ${data.gauge_location}</div>` : ''}
+                            ${data.water_line_position ? `<div><i class="bi bi-water"></i> <strong>Water line:</strong> ${data.water_line_position}</div>` : ''}
+                        </div>`;
+                    }
+
                     resultDiv.innerHTML = `
-                        <div class="alert alert-success">
+                        <div class="alert ${data.tamper_detected ? 'alert-warning' : 'alert-success'}">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <h6 class="mb-0"><i class="bi bi-check-circle"></i> Reading Detected!</h6>
-                                <div>${pipelineBadge}${processingTime}</div>
+                                <div>${pipelineBadge}${qualityBadge}${processingTime}</div>
                             </div>
                             ${conditionBadges ? '<div class="mb-2">' + conditionBadges + '</div>' : ''}
                             <div class="display-4 text-center my-2">${data.water_level} m</div>
                             <small class="d-block text-center text-muted">Confidence: ${(data.confidence * 100).toFixed(0)}%</small>
-                            <p class="mb-0 mt-2 small">${data.message || ''}</p>
+                            ${gaugeInfo}
+                            <p class="mb-0 mt-2 small">${data.message || data.reason || ''}</p>
+                            ${tamperWarning}
                             ${voiceWarning}
+                            ${suggestionsHtml}
                         </div>
                     `;
 
@@ -969,12 +1014,46 @@
                         pipelineBadge = '<span class="badge bg-info"><i class="bi bi-stars"></i> Gemini AI</span> ';
                     }
 
+                    // Tamper warning for errors too
+                    let tamperWarningError = '';
+                    if (data.tamper_detected) {
+                        tamperWarningError = `<div class="alert alert-danger mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-shield-exclamation"></i> Image Tampering Detected!</strong>
+                            <p class="mb-1 small">${data.tamper_reason || 'This image appears to have been altered or manipulated.'}</p>
+                            <small class="text-muted">Please take a fresh, unedited photo of the gauge.</small>
+                        </div>`;
+                    }
+
+                    // Suggestions for failure case
+                    let failSuggestions = '';
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        failSuggestions = `<div class="alert alert-info mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-lightbulb"></i> How to get a better reading:</strong>
+                            <ul class="mb-0 ps-3 mt-1 small">
+                                ${data.suggestions.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                    } else {
+                        // Default suggestions if none provided
+                        failSuggestions = `<div class="alert alert-info mt-2 mb-0 py-2 px-3">
+                            <strong><i class="bi bi-lightbulb"></i> Tips for a clear reading:</strong>
+                            <ul class="mb-0 ps-3 mt-1 small">
+                                <li>Move closer to the gauge for clearer numbers</li>
+                                <li>Ensure good lighting on the gauge</li>
+                                <li>Hold camera steady to avoid blur</li>
+                                <li>Take photo straight-on, not at an angle</li>
+                            </ul>
+                        </div>`;
+                    }
+
                     resultDiv.innerHTML = `
-                        <div class="alert alert-warning">
-                            <h6><i class="bi bi-exclamation-triangle"></i> Could not read gauge ${pipelineBadge}</h6>
-                            <p class="mb-0">${data.message || data.error || 'Try moving closer or improving lighting.'}</p>
+                        <div class="alert ${data.tamper_detected ? 'alert-danger' : 'alert-warning'}">
+                            <h6><i class="bi bi-exclamation-triangle"></i> ${data.tamper_detected ? 'Cannot Accept Image' : 'Could not read gauge'} ${pipelineBadge}</h6>
+                            <p class="mb-0">${data.reason || data.message || data.error || 'Unable to detect water level from this image.'}</p>
                             ${data.requires_voice_fallback ? '<div class="mt-2"><small><i class="bi bi-mic"></i> Consider using voice + photo fallback</small></div>' : ''}
                         </div>
+                        ${tamperWarningError}
+                        ${failSuggestions}
                     `;
                 }
 

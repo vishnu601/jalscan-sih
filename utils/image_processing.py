@@ -79,39 +79,83 @@ def analyze_water_gauge(image_path):
         # Load the image
         img = Image.open(image_path)
         
-        # Improved prompt for water gauge reading - MORE DETAILED
-        prompt = """You are an expert hydrologist who specializes in reading water level gauges accurately.
+        # Comprehensive prompt for water gauge reading with tamper detection
+        prompt = """You are an expert hydrologist and image analyst who specializes in reading water level gauges and detecting image tampering.
 
-TASK: Read the water level from this gauge image with precision.
+TASK: Analyze this image to read the water level gauge and check for any signs of tampering or manipulation.
 
-INSTRUCTIONS:
-1. Look carefully at the measuring stick/gauge in the image
-2. Find where the water surface meets the gauge
-3. Read the exact number marked at the water line
-4. The gauge usually has markings in meters or centimeters
+## STEP 1: IMAGE QUALITY ASSESSMENT
+First, evaluate the image quality:
+- Is the image clear or blurry?
+- Is the lighting adequate?
+- Is the gauge visible and readable?
+- Is the image taken from a suitable angle?
 
-IMPORTANT GUIDELINES:
-- Look for painted numbers on the gauge staff (e.g., 1, 2, 3, 4, 5 meters)
-- Look for smaller subdivision marks between the main numbers
-- The water level is where the water surface intersects the gauge
-- If gauge shows cm, convert to meters (e.g., 250 cm = 2.50 meters)
-- Be precise - include decimals (e.g., 2.35 meters, not just 2 meters)
+## STEP 2: GAUGE DETECTION
+Look for the water level gauge in the image:
+- Identify the measuring stick/staff with painted markings
+- Note the position of the gauge (left/right/center of image)
+- Check if numbers are visible (usually 0-5 meters or similar)
+- Look for subdivision marks between main numbers
 
-OUTPUT: Return ONLY this JSON format with your reading:
+## STEP 3: WATER LEVEL READING
+Find and read the water level:
+- Locate where the water surface meets the gauge
+- Read the exact measurement at the water line
+- Note the units (meters or centimeters - convert to meters)
+- Be precise with decimals (e.g., 2.35 meters)
+
+## STEP 4: TAMPER DETECTION
+Check for signs of image manipulation:
+- Unusual pixelation or artifacts around gauge numbers
+- Inconsistent lighting or shadows
+- Signs of digital editing (clone stamping, airbrushing)
+- Unnatural color patterns
+- Gauge numbers that look altered or pasted
+- Water line that looks artificially drawn
+- Missing or inconsistent reflections
+- Perspective distortions that don't match surroundings
+
+## OUTPUT FORMAT
+Return ONLY this JSON structure:
 {
     "water_level": 2.35,
     "confidence": 0.85,
     "is_valid": true,
-    "reason": "Clear reading at 2.35m mark on gauge"
+    "gauge_location": "center-left of image, clearly visible",
+    "water_line_position": "water meets gauge at 2.35m mark",
+    "tamper_detected": false,
+    "tamper_reason": null,
+    "image_quality": "good",
+    "suggestions": [],
+    "reason": "Clear reading at 2.35m mark on vertical gauge staff"
 }
 
-NOTES:
-- water_level should be a decimal number in METERS (e.g., 2.35)
-- confidence should be between 0.0 and 1.0
-- is_valid should be true if you can see and read the gauge
-- reason should explain what you see
+## FIELD EXPLANATIONS:
+- water_level: Reading in METERS (decimal number, e.g., 2.35). Set to null if unreadable.
+- confidence: 0.0 to 1.0 based on clarity and certainty
+- is_valid: true if you can read the gauge, false otherwise
+- gauge_location: Describe WHERE in the image the gauge is (e.g., "left side", "center", "not visible")
+- water_line_position: Describe where water meets the gauge
+- tamper_detected: true if image shows signs of manipulation
+- tamper_reason: If tampered, explain what looks suspicious
+- image_quality: "excellent", "good", "fair", "poor", or "unusable"
+- suggestions: Array of tips to get better reading. Include if confidence < 0.8 or quality is poor. Examples:
+  - "Move closer to the gauge for clearer numbers"
+  - "Ensure better lighting on the gauge"
+  - "Take photo straight-on, not at an angle"
+  - "Avoid reflections on the water surface"
+  - "Keep camera steady to avoid blur"
+  - "Make sure the full gauge scale is visible"
+- reason: Brief explanation of your reading or why it failed
 
-Return ONLY the JSON, nothing else."""
+## IMPORTANT NOTES:
+- If image looks tampered, set tamper_detected to true and explain in tamper_reason
+- If you cannot read the gauge, set water_level to null and is_valid to false
+- Always provide helpful suggestions when confidence is low
+- Be thorough but return ONLY the JSON, nothing else
+
+Return ONLY the JSON object, no other text."""
         
         response = model.generate_content([prompt, img])
         text = response.text.strip()

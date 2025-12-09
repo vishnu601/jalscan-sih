@@ -69,26 +69,51 @@ class GeminiWaterLevelDetector:
     
     def _analyze_with_gemini(self, image_path: str) -> Dict:
         """
-        Send image to Gemini AI for water level analysis.
+        Send image to Gemini AI for water level analysis with tamper detection.
         """
         try:
             from utils.image_processing import analyze_water_gauge
             
             result = analyze_water_gauge(image_path)
             
-            if result and result.get('water_level') is not None:
-                return {
+            if result:
+                # Check for tamper detection
+                tamper_detected = result.get('tamper_detected', False)
+                
+                # Build response with all available fields
+                response = {
                     'water_level': result.get('water_level'),
-                    'confidence': result.get('confidence', 0.8),
-                    'is_valid': result.get('is_valid', True),
-                    'reason': 'Gemini AI analysis'
+                    'confidence': result.get('confidence', 0.0),
+                    'is_valid': result.get('is_valid', False),
+                    'reason': result.get('reason', 'Gemini AI analysis'),
+                    # New enhanced fields
+                    'gauge_location': result.get('gauge_location', 'Not detected'),
+                    'water_line_position': result.get('water_line_position', 'Not detected'),
+                    'tamper_detected': tamper_detected,
+                    'tamper_reason': result.get('tamper_reason'),
+                    'image_quality': result.get('image_quality', 'unknown'),
+                    'suggestions': result.get('suggestions', [])
                 }
+                
+                # If tampered, mark as invalid and adjust reason
+                if tamper_detected:
+                    response['is_valid'] = False
+                    response['reason'] = f"Image appears tampered: {result.get('tamper_reason', 'Suspicious alterations detected')}"
+                    if not response['suggestions']:
+                        response['suggestions'] = [
+                            "Take a fresh photo without any editing",
+                            "Ensure the gauge is clearly visible",
+                            "Capture the image in good lighting"
+                        ]
+                
+                return response
             else:
                 return {
                     'water_level': None,
                     'confidence': 0.0,
                     'is_valid': False,
-                    'reason': result.get('reason', 'Could not read gauge') if result else 'Gemini returned no result'
+                    'reason': 'Gemini returned no result',
+                    'suggestions': ['Try taking the photo again with better lighting']
                 }
                 
         except ImportError as e:
