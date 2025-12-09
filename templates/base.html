@@ -493,27 +493,54 @@
         </div>
     </nav>
 
-    <!-- Install App Prompt -->
+    <!-- Install App Banner (Sticky at top) -->
+    <div id="installBanner" class="alert alert-primary alert-dismissible fade show d-none"
+        style="position: fixed; top: 0; left: 0; right: 0; z-index: 9999; border-radius: 0; margin: 0; display: flex !important; align-items: center; justify-content: center; gap: 15px; padding: 12px 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="/static/icons/icon-192.png" alt="JalScan" style="width: 40px; height: 40px; border-radius: 8px;">
+            <div>
+                <strong>Install JalScan</strong>
+                <small class="d-block text-muted">Works offline! Take readings anywhere.</small>
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="installBannerBtn">
+            <i class="bi bi-download"></i> Install
+        </button>
+        <button type="button" class="btn-close" id="dismissBanner" aria-label="Close"></button>
+    </div>
+
+    <!-- Install App Prompt Modal -->
     <div class="modal fade" id="installPrompt" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
-                        <i class="bi bi-download"></i> Install JalScan
+                        <i class="bi bi-phone"></i> Install JalScan App
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <p>Install JalScan on your device for a better experience:</p>
-                    <ul>
-                        <li>Quick access from home screen</li>
-                        <li>Works offline</li>
-                        <li>Faster loading</li>
-                    </ul>
+                <div class="modal-body text-center py-4">
+                    <img src="/static/icons/icon-192.png" alt="JalScan"
+                        style="width: 80px; height: 80px; border-radius: 16px; margin-bottom: 20px;">
+                    <h5>Get the Full App Experience!</h5>
+                    <p class="text-muted">Install JalScan on your device for:</p>
+                    <div class="row text-start mt-3">
+                        <div class="col-6">
+                            <p class="mb-2"><i class="bi bi-wifi-off text-primary"></i> Works <strong>offline</strong>
+                            </p>
+                            <p class="mb-2"><i class="bi bi-lightning text-warning"></i> Faster loading</p>
+                        </div>
+                        <div class="col-6">
+                            <p class="mb-2"><i class="bi bi-house text-success"></i> Home screen access</p>
+                            <p class="mb-2"><i class="bi bi-bell text-danger"></i> Push notifications</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Later</button>
-                    <button type="button" class="btn btn-primary" id="installBtn">Install</button>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Maybe Later</button>
+                    <button type="button" class="btn btn-primary btn-lg" id="installBtn">
+                        <i class="bi bi-download"></i> Install Now
+                    </button>
                 </div>
             </div>
         </div>
@@ -526,6 +553,7 @@
         // PWA Install Prompt
         let deferredPrompt;
         const installPromptModal = new bootstrap.Modal(document.getElementById('installPrompt'));
+        const installBanner = document.getElementById('installBanner');
 
         window.addEventListener('beforeinstallprompt', (e) => {
             // Prevent the mini-infobar from appearing on mobile
@@ -533,25 +561,60 @@
             // Stash the event so it can be triggered later
             deferredPrompt = e;
 
-            // Show install prompt after 10 seconds
-            setTimeout(() => {
-                if (deferredPrompt && !isAppInstalled()) {
-                    installPromptModal.show();
+            // Check if user dismissed before (localStorage)
+            const dismissed = localStorage.getItem('pwaInstallDismissed');
+            const dismissedTime = localStorage.getItem('pwaInstallDismissedTime');
+            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+
+            // Show banner if not dismissed or dismissed more than a day ago
+            if (!isAppInstalled() && (!dismissed || (dismissedTime && parseInt(dismissedTime) < oneDayAgo))) {
+                // Show banner immediately
+                if (installBanner) {
+                    installBanner.classList.remove('d-none');
                 }
-            }, 10000);
+
+                // Show modal after 15 seconds if banner still visible
+                setTimeout(() => {
+                    if (deferredPrompt && !isAppInstalled() && installBanner.classList.contains('d-none')) {
+                        installPromptModal.show();
+                    }
+                }, 15000);
+            }
         });
 
+        // Install button in modal
         document.getElementById('installBtn').addEventListener('click', async () => {
+            await triggerInstall();
+        });
+
+        // Install button in banner
+        if (document.getElementById('installBannerBtn')) {
+            document.getElementById('installBannerBtn').addEventListener('click', async () => {
+                await triggerInstall();
+            });
+        }
+
+        // Dismiss banner
+        if (document.getElementById('dismissBanner')) {
+            document.getElementById('dismissBanner').addEventListener('click', () => {
+                installBanner.classList.add('d-none');
+                localStorage.setItem('pwaInstallDismissed', 'true');
+                localStorage.setItem('pwaInstallDismissedTime', Date.now().toString());
+            });
+        }
+
+        async function triggerInstall() {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
                     console.log('User accepted the install prompt');
+                    if (installBanner) installBanner.classList.add('d-none');
                 }
                 deferredPrompt = null;
                 installPromptModal.hide();
             }
-        });
+        }
 
         function isAppInstalled() {
             return window.matchMedia('(display-mode: standalone)').matches ||
