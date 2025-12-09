@@ -148,7 +148,7 @@
                                     <div class="spinner-border spinner-border-sm text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
-                                    <span class="ms-2">Analyzing with Gemini AI...</span>
+                                    <span class="ms-2">Analyzing with OpenCV...</span>
                                 </div>
                                 <div id="ai-result" class="d-none">
                                     <p class="mb-1"><strong>Water Level:</strong> <span id="ai-water-level"
@@ -206,6 +206,11 @@
                             style="background: black; border-radius: 8px; object-fit: cover;"></video>
                         <canvas id="gauge-canvas" style="display: none;"></canvas>
 
+                        <!-- Captured Image Preview (hidden initially) -->
+                        <img id="gauge-captured-image" class="d-none" width="100%"
+                            style="border-radius: 8px; object-fit: cover; max-height: 400px;"
+                            alt="Captured gauge image">
+
                         <!-- Scanning Overlay -->
                         <div id="gauge-overlay"
                             class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center pointer-events-none"
@@ -220,7 +225,7 @@
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2">Analyzing with Gemini AI...</p>
+                        <p class="mt-2">Analyzing with OpenCV...</p>
                     </div>
 
                     <div id="gauge-result" class="d-none">
@@ -229,6 +234,9 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="retake-gauge-btn" class="btn btn-outline-warning d-none">
+                        <i class="bi bi-arrow-counterclockwise"></i> Retake Photo
+                    </button>
                     <button type="button" id="capture-gauge-btn" class="btn btn-primary">
                         <i class="bi bi-camera"></i> Capture & Analyze
                     </button>
@@ -876,6 +884,8 @@
         document.getElementById('capture-gauge-btn').addEventListener('click', async function () {
             const video = document.getElementById('gauge-video');
             const canvas = document.getElementById('gauge-canvas');
+            const capturedImage = document.getElementById('gauge-captured-image');
+            const overlay = document.getElementById('gauge-overlay');
             const context = canvas.getContext('2d');
 
             canvas.width = video.videoWidth;
@@ -883,6 +893,12 @@
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             const imageDataUrl = canvas.toDataURL('image/jpeg');
+
+            // Show captured image, hide video and overlay
+            video.classList.add('d-none');
+            overlay.classList.add('d-none');
+            capturedImage.src = imageDataUrl;
+            capturedImage.classList.remove('d-none');
 
             // Show loading state
             document.getElementById('gauge-loading').classList.remove('d-none');
@@ -900,7 +916,9 @@
 
                 document.getElementById('gauge-loading').classList.add('d-none');
                 document.getElementById('gauge-result').classList.remove('d-none');
-                document.getElementById('capture-gauge-btn').disabled = false;
+                // Show retake button, hide capture button
+                document.getElementById('capture-gauge-btn').classList.add('d-none');
+                document.getElementById('retake-gauge-btn').classList.remove('d-none');
 
                 const resultDiv = document.getElementById('gauge-result');
 
@@ -910,9 +928,9 @@
                     let conditionBadges = '';
 
                     if (data.method === 'gemini') {
-                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-stars"></i> Gemini AI</span>';
+                        pipelineBadge = '<span class="badge bg-success me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
                     } else {
-                        pipelineBadge = '<span class="badge bg-info me-1"><i class="bi bi-stars"></i> Gemini AI</span>';
+                        pipelineBadge = '<span class="badge bg-success me-1"><i class="bi bi-cpu"></i> OpenCV</span>';
                     }
 
                     // Show detected conditions
@@ -1011,7 +1029,7 @@
                     // Error/failure display with pipeline info
                     let pipelineBadge = '';
                     if (data.method) {
-                        pipelineBadge = '<span class="badge bg-info"><i class="bi bi-stars"></i> Gemini AI</span> ';
+                        pipelineBadge = '<span class="badge bg-success"><i class="bi bi-cpu"></i> OpenCV</span> ';
                     }
 
                     // Tamper warning for errors too
@@ -1071,7 +1089,19 @@
             document.getElementById('gauge-result').classList.add('d-none');
             document.getElementById('use-gauge-value-btn').classList.add('d-none');
             document.getElementById('capture-gauge-btn').disabled = false;
+            // Reset video/image display
+            document.getElementById('gauge-video').classList.remove('d-none');
+            document.getElementById('gauge-overlay').classList.remove('d-none');
+            document.getElementById('gauge-captured-image').classList.add('d-none');
+            // Reset buttons
+            document.getElementById('capture-gauge-btn').classList.remove('d-none');
+            document.getElementById('retake-gauge-btn').classList.add('d-none');
         }
+
+        // Retake photo button handler
+        document.getElementById('retake-gauge-btn').addEventListener('click', function () {
+            resetGaugeModal();
+        });
 
         // Allow Enter key in manual QR input
         document.getElementById('manual-qr-input').addEventListener('keypress', function (e) {
