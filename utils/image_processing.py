@@ -64,6 +64,7 @@ def analyze_water_gauge(image_path):
     """
     import google.generativeai as genai
     import json
+    import io
     
     api_key = os.environ.get('GOOGLE_API_KEY')
     if not api_key:
@@ -73,11 +74,19 @@ def analyze_water_gauge(image_path):
     try:
         genai.configure(api_key=api_key)
         
-        # Use gemini-2.5-flash for vision tasks
+        # Use gemini-2.5-flash (trying different model for quota)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # Load the image
+        # Load and optimize the image
         img = Image.open(image_path)
+        
+        # Resize image if too large (max 1024px on longest side) to speed up upload/processing
+        max_size = 1024
+        if max(img.size) > max_size:
+            ratio = max_size / max(img.size)
+            new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            # print(f"Resized image to {new_size} for faster processing")
         
         # Precise Hydrological Gauge Reader with Chain-of-Thought reasoning and Scene Validation
         prompt = """### PRECISE HYDROLOGICAL GAUGE READER
@@ -182,22 +191,18 @@ Return ONLY this JSON structure:
 5. If unsure, lower your confidence score and add suggestions
 6. Return ONLY the JSON, no other text"""
         
-        response = model.generate_content([prompt, img])
-        text = response.text.strip()
-        
-        # Clean up potential markdown code blocks
-        if text.startswith('```json'):
-            text = text[7:]
-        elif text.startswith('```'):
-            text = text[3:]
-        if text.endswith('```'):
-            text = text[:-3]
-        text = text.strip()
-        
-        print(f"Gemini AI Response: {text}")
-        
         try:
-            result = json.loads(text)
+            response = model.generate_content([prompt, img])
+            # print(f"Gemini Response: {response.text}")
+            text = response.text.strip()
+            
+            # Clean up the response if it contains markdown code blocks
+            if "```json" in text:
+                text = text.replace("```json", "").replace("```", "")
+            elif "```" in text:
+                text = text.replace("```", "")
+                
+            result = json.loads(text.strip())
             # Ensure we have all required fields
             if 'water_level' not in result:
                 result['water_level'] = None
@@ -206,7 +211,7 @@ Return ONLY this JSON structure:
             if 'is_valid' not in result:
                 result['is_valid'] = result.get('water_level') is not None
             if 'reason' not in result:
-                result['reason'] = 'Analyzed with OpenCV'
+                result['reason'] = 'Analysis complete'
             return result
         except json.JSONDecodeError as e:
             print(f"Could not parse AI response as JSON: {text}, error: {e}")

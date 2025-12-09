@@ -87,7 +87,7 @@ def create_app(config_name='default'):
 *   **Urgency**: If the user seems in immediate danger (e.g., "water is entering my house"), advise them to **seek higher ground immediately** and contact local emergency services (112 or local equivalent).
 """
         crisis_model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             system_instruction=SYSTEM_INSTRUCTION
         )
     else:
@@ -2468,75 +2468,63 @@ def create_app(config_name='default'):
                 analyst_site_ids = get_analyst_site_ids() or []
             
             # Get recent tamper detections (filtered for analysts)
-            if analyst_site_ids is not None:
-                # Filter detections by submission's site
-                recent_detections = TamperDetection.query.join(
-                    WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id
-                ).filter(
-                    WaterLevelSubmission.site_id.in_(analyst_site_ids) if analyst_site_ids else False
-                ).order_by(TamperDetection.detected_at.desc()).limit(20).all()
-            else:
-                recent_detections = TamperDetection.query.order_by(
-                    TamperDetection.detected_at.desc()
-                ).limit(20).all()
+            q = TamperDetection.query.join(
+                WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id
+            )
             
-            # Get statistics - filtered for analyst
+            only_my_submissions = request.args.get('my_submissions') == 'true'
+            
             if analyst_site_ids is not None:
-                # Build base query filter for submissions in analyst's sites
-                submission_filter = WaterLevelSubmission.site_id.in_(analyst_site_ids) if analyst_site_ids else WaterLevelSubmission.id == -1
+                q = q.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
                 
-                total_detections = TamperDetection.query.join(
-                    WaterLevelSubmission
-                ).filter(submission_filter).count()
-                pending_review = TamperDetection.query.join(
-                    WaterLevelSubmission
-                ).filter(submission_filter, TamperDetection.review_status == 'pending').count()
-                confirmed_tamper = TamperDetection.query.join(
-                    WaterLevelSubmission
-                ).filter(submission_filter, TamperDetection.review_status == 'confirmed').count()
-                false_positives = TamperDetection.query.join(
-                    WaterLevelSubmission
-                ).filter(submission_filter, TamperDetection.review_status == 'false_positive').count()
+            if only_my_submissions:
+                q = q.filter(WaterLevelSubmission.user_id == current_user.id)
                 
-                total_submissions = WaterLevelSubmission.query.filter(submission_filter).count()
-                suspicious_submissions = WaterLevelSubmission.query.filter(
-                    submission_filter,
-                    WaterLevelSubmission.tamper_score > 0.7
-                ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
+            recent_detections = q.order_by(TamperDetection.detected_at.desc()).limit(20).all()
+            
+            # Get statistics
+            # Build base query filter
+            submission_filter = True # Base "always true"
+            if analyst_site_ids is not None:
+                submission_filter = WaterLevelSubmission.site_id.in_(analyst_site_ids)
+            
+            # We construct queries based on base filter + potential user filter
+            def get_stats_query(base_query):
+                query = base_query
+                if analyst_site_ids is not None:
+                    query = query.filter(submission_filter)
+                if only_my_submissions:
+                    query = query.filter(WaterLevelSubmission.user_id == current_user.id)
+                return query
                 
-                clean_submissions = WaterLevelSubmission.query.filter(
-                    submission_filter,
-                    db.or_(
-                        WaterLevelSubmission.tamper_score == None,
-                        WaterLevelSubmission.tamper_score <= 0.3
-                    )
-                ).count()
-                
-                avg_score_result = db.session.query(
-                    db.func.avg(WaterLevelSubmission.tamper_score)
-                ).filter(submission_filter, WaterLevelSubmission.tamper_score != None).scalar()
-            else:
-                # Admin/Supervisor see all
-                total_detections = TamperDetection.query.count()
-                pending_review = TamperDetection.query.filter_by(review_status='pending').count()
-                confirmed_tamper = TamperDetection.query.filter_by(review_status='confirmed').count()
-                false_positives = TamperDetection.query.filter_by(review_status='false_positive').count()
-                
-                total_submissions = WaterLevelSubmission.query.count()
-                suspicious_submissions = WaterLevelSubmission.query.filter(
-                    WaterLevelSubmission.tamper_score > 0.7
-                ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
-                
-                clean_submissions = WaterLevelSubmission.query.filter(
-                    db.or_(
-                        WaterLevelSubmission.tamper_score == None,
-                        WaterLevelSubmission.tamper_score <= 0.3
-                    )
-                ).count()
-                
-                avg_score_result = db.session.query(
-                    db.func.avg(WaterLevelSubmission.tamper_score)
-                ).filter(WaterLevelSubmission.tamper_score != None).scalar()
+            total_detections_q = TamperDetection.query.join(WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id)
+            total_detections = get_stats_query(total_detections_q).with_entities(TamperDetection.submission_id).distinct().count()
+            
+            pending_review_q = TamperDetection.query.join(WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id).filter(TamperDetection.review_status == 'pending')
+            pending_review = get_stats_query(pending_review_q).with_entities(TamperDetection.submission_id).distinct().count()
+            
+            confirmed_tamper_q = TamperDetection.query.join(WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id).filter(TamperDetection.review_status == 'confirmed')
+            confirmed_tamper = get_stats_query(confirmed_tamper_q).with_entities(TamperDetection.submission_id).distinct().count()
+            
+            false_positives_q = TamperDetection.query.join(WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id).filter(TamperDetection.review_status == 'false_positive')
+            false_positives = get_stats_query(false_positives_q).with_entities(TamperDetection.submission_id).distinct().count()
+            
+            submissions_q = WaterLevelSubmission.query
+            total_submissions = get_stats_query(submissions_q).count()
+            
+            suspicious_q = WaterLevelSubmission.query.filter(WaterLevelSubmission.tamper_score > 0.7)
+            suspicious_submissions = get_stats_query(suspicious_q).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
+            
+            clean_q = WaterLevelSubmission.query.filter(
+                db.or_(
+                    WaterLevelSubmission.tamper_score == None,
+                    WaterLevelSubmission.tamper_score <= 0.3
+                )
+            )
+            clean_submissions = get_stats_query(clean_q).count()
+            
+            avg_score_q = db.session.query(db.func.avg(WaterLevelSubmission.tamper_score)).filter(WaterLevelSubmission.tamper_score != None)
+            avg_score_result = get_stats_query(submissions_q.with_entities(db.func.avg(WaterLevelSubmission.tamper_score))).scalar()
             
             avg_tamper_score = round(avg_score_result or 0, 3)
             
@@ -2639,43 +2627,68 @@ def create_app(config_name='default'):
             end_date = datetime.utcnow()
             start_date = end_date - timedelta(days=days)
             
+            # Role-based filtering
+            analyst_site_ids = None
+            only_my_submissions = request.args.get('my_submissions') == 'true'
+            
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
+                if not analyst_site_ids:
+                    return jsonify({'dates': [], 'counts': [], 'avg_scores': [], 'types': [], 'severities': []})
+
+            # Helper to apply site filter
+            def apply_tamper_filter(q):
+                query = q.join(WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id)
+                if analyst_site_ids is not None:
+                    query = query.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+                if only_my_submissions:
+                    query = query.filter(WaterLevelSubmission.user_id == current_user.id)
+                return query
+
+            def apply_submission_filter(q):
+                if analyst_site_ids is not None:
+                     q = q.filter(WaterLevelSubmission.site_id.in_(analyst_site_ids))
+                if only_my_submissions:
+                     q = q.filter(WaterLevelSubmission.user_id == current_user.id)
+                return q
+
             # Get detections by date
-            detections_by_date = db.session.query(
+            q1 = db.session.query(
                 db.func.date(TamperDetection.detected_at).label('date'),
                 db.func.count(TamperDetection.id).label('count')
-            ).filter(
-                TamperDetection.detected_at >= start_date
-            ).group_by(
+            ).filter(TamperDetection.detected_at >= start_date)
+            
+            detections_by_date = apply_tamper_filter(q1).group_by(
                 db.func.date(TamperDetection.detected_at)
             ).order_by('date').all()
             
             # Get tamper scores by date
-            scores_by_date = db.session.query(
+            q2 = db.session.query(
                 db.func.date(WaterLevelSubmission.timestamp).label('date'),
                 db.func.avg(WaterLevelSubmission.tamper_score).label('avg_score'),
                 db.func.max(WaterLevelSubmission.tamper_score).label('max_score'),
                 db.func.count(WaterLevelSubmission.id).label('count')
-            ).filter(
-                WaterLevelSubmission.timestamp >= start_date
-            ).group_by(
+            ).filter(WaterLevelSubmission.timestamp >= start_date)
+            
+            scores_by_date = apply_submission_filter(q2).group_by(
                 db.func.date(WaterLevelSubmission.timestamp)
             ).order_by('date').all()
             
             # Get detections by type
-            detections_by_type = db.session.query(
+            q3 = db.session.query(
                 TamperDetection.detection_type,
                 db.func.count(TamperDetection.id).label('count')
-            ).filter(
-                TamperDetection.detected_at >= start_date
-            ).group_by(TamperDetection.detection_type).all()
+            ).filter(TamperDetection.detected_at >= start_date)
+            
+            detections_by_type = apply_tamper_filter(q3).group_by(TamperDetection.detection_type).all()
             
             # Get detections by severity
-            detections_by_severity = db.session.query(
+            q4 = db.session.query(
                 TamperDetection.severity,
                 db.func.count(TamperDetection.id).label('count')
-            ).filter(
-                TamperDetection.detected_at >= start_date
-            ).group_by(TamperDetection.severity).all()
+            ).filter(TamperDetection.detected_at >= start_date)
+            
+            detections_by_severity = apply_tamper_filter(q4).group_by(TamperDetection.severity).all()
             
             return jsonify({
                 'trends': {

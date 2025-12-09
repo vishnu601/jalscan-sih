@@ -21,6 +21,9 @@
                     <button class="btn btn-primary btn-sm" onclick="runBatchAnalysis()">
                         <i class="bi bi-arrow-repeat"></i> <span data-i18n="run_analysis">Run Analysis</span>
                     </button>
+                    <button class="btn btn-outline-dark btn-sm" id="myDataToggle" onclick="toggleMyData()">
+                        <i class="bi bi-person-check"></i> <span id="myDataText">My Data Only</span>
+                    </button>
                     <button class="btn btn-danger btn-sm disabled">
                         <i class="bi bi-shield-lock-fill"></i> <span data-i18n="security_active">Security Active</span>
                     </button>
@@ -44,12 +47,14 @@
 <div class="row g-3">
     <div class="col-xl-2 col-md-4 col-6">
         <div class="card bg-primary bg-opacity-10 bg-gradient border border-primary border-opacity-25 shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-center">
-                    <h3 class="card-title fw-bold text-primary" id="totalDetections">0</h3>
-                    <p class="card-text small text-uppercase fw-bold text-primary opacity-75" data-i18n="total">Total
-                    </p>
-                    <i class="bi bi-exclamation-triangle display-6 mt-2 text-primary opacity-50"></i></i>
+            <div class="card bg-primary bg-opacity-10 border-primary h-100">
+                <div class="card-body text-center p-3">
+                    <h2 class="display-6 fw-bold text-primary mb-0" id="totalDetections">--</h2>
+                    <small class="text-uppercase text-muted fw-bold ls-1" style="font-size: 0.7rem;">TOTAL
+                        SUBMISSIONS</small>
+                    <div class="mt-2 text-primary opacity-50">
+                        <i class="bi bi-exclamation-triangle fs-4"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -321,6 +326,25 @@
         loadTrendCharts();
     }
 
+    // Toggle My Data view
+    let showMyData = false;
+    function toggleMyData() {
+        showMyData = !showMyData;
+        const btn = document.getElementById('myDataToggle');
+        const text = document.getElementById('myDataText');
+
+        if (showMyData) {
+            btn.classList.remove('btn-outline-dark');
+            btn.classList.add('btn-dark');
+            text.textContent = 'Showing My Data';
+        } else {
+            btn.classList.remove('btn-dark');
+            btn.classList.add('btn-outline-dark');
+            text.textContent = 'My Data Only';
+        }
+        refreshData();
+    }
+
     // Refresh all data
     function refreshData() {
         showToast('Refreshing dashboard...', 'info');
@@ -330,141 +354,145 @@
     // Load trend charts
     async function loadTrendCharts() {
         try {
-            const response = await fetch(`/api/tamper-detection/trends?days=${currentDays}`);
+            const response = await fetch(`/api/tamper-detection/trends?days=${currentDays}&my_submissions=${showMyData}`);
             const data = await response.json();
 
-            // Detection Trends Chart
-            const trendCtx = document.createElement('canvas');
-            document.getElementById('trendChart').innerHTML = '';
-            document.getElementById('trendChart').appendChild(trendCtx);
+            if (typeof Chart !== 'undefined') {
+                const trendCtx = document.createElement('canvas');
+                document.getElementById('trendChart').innerHTML = '';
+                document.getElementById('trendChart').appendChild(trendCtx);
 
-            if (trendChart) trendChart.destroy();
-            trendChart = new Chart(trendCtx, {
-                type: 'bar',
-                data: {
-                    labels: data.trends.labels,
-                    datasets: [{
-                        label: 'Detections',
-                        data: data.trends.detections,
-                        backgroundColor: 'rgba(255, 193, 7, 0.6)', // Warning Yellow (Softer)
-                        borderColor: 'rgba(255, 193, 7, 1)',
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { display: true, drawBorder: false, color: 'rgba(0,0,0,0.05)' },
-                            ticks: { font: { size: 11 } }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { font: { size: 11 } }
+                if (trendChart) trendChart.destroy();
+                trendChart = new Chart(trendCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.trends.labels,
+                        datasets: [{
+                            label: 'Detections',
+                            data: data.trends.detections,
+                            backgroundColor: 'rgba(255, 193, 7, 0.6)',
+                            borderColor: 'rgba(255, 193, 7, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { display: true, drawBorder: false, color: 'rgba(0,0,0,0.05)' },
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { size: 11 } }
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            // Tamper Score Timeline
-            const scoreCtx = document.createElement('canvas');
-            document.getElementById('scoreChart').innerHTML = '';
-            document.getElementById('scoreChart').appendChild(scoreCtx);
+                // Tamper Score Timeline
+                const scoreCtx = document.createElement('canvas');
+                document.getElementById('scoreChart').innerHTML = '';
+                document.getElementById('scoreChart').appendChild(scoreCtx);
 
-            if (scoreChart) scoreChart.destroy();
-            scoreChart = new Chart(scoreCtx, {
-                type: 'line',
-                data: {
-                    labels: data.scores.labels,
-                    datasets: [{
-                        label: 'Avg Score',
-                        data: data.scores.avg_scores,
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 2
-                    }, {
-                        label: 'Max Score',
-                        data: data.scores.max_scores,
-                        borderColor: 'rgba(255, 193, 7, 1)', // Warning Yellow
-                        borderDash: [5, 5],
-                        fill: false,
-                        tension: 0.4,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 1,
-                            grid: { display: true, drawBorder: false, color: 'rgba(0,0,0,0.05)' }
-                        },
-                        x: { grid: { display: false } }
+                if (scoreChart) scoreChart.destroy();
+                scoreChart = new Chart(scoreCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.scores.labels,
+                        datasets: [{
+                            label: 'Avg Score',
+                            data: data.scores.avg_scores,
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2
+                        }, {
+                            label: 'Max Score',
+                            data: data.scores.max_scores,
+                            borderColor: 'rgba(255, 193, 7, 1)',
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 1,
+                                grid: { display: true, drawBorder: false, color: 'rgba(0,0,0,0.05)' }
+                            },
+                            x: { grid: { display: false } }
+                        }
                     }
-                }
-            });
+                });
 
-            // By Type Chart
-            const typeCtx = document.createElement('canvas');
-            document.getElementById('typeChart').innerHTML = '';
-            document.getElementById('typeChart').appendChild(typeCtx);
+                // By Type Chart
+                const typeCtx = document.createElement('canvas');
+                document.getElementById('typeChart').innerHTML = '';
+                document.getElementById('typeChart').appendChild(typeCtx);
 
-            if (typeChart) typeChart.destroy();
-            typeChart = new Chart(typeCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: data.by_type.labels.length > 0 ? data.by_type.labels : ['No Data'],
-                    datasets: [{
-                        data: data.by_type.data.length > 0 ? data.by_type.data : [1],
-                        backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'], // Soft Semantic Colors
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%',
-                    plugins: { legend: { display: false } }
-                }
-            });
-
-            // By Severity Chart
-            const severityCtx = document.createElement('canvas');
-            document.getElementById('severityChart').innerHTML = '';
-            document.getElementById('severityChart').appendChild(severityCtx);
-
-            if (severityChart) severityChart.destroy();
-            severityChart = new Chart(severityCtx, {
-                type: 'bar',
-                data: {
-                    labels: data.by_severity.labels.length > 0 ? data.by_severity.labels : ['No Data'],
-                    datasets: [{
-                        label: 'Count',
-                        data: data.by_severity.data.length > 0 ? data.by_severity.data : [0],
-                        backgroundColor: ['#17a2b8', '#ffc107', '#dc3545', '#343a40'], // Semantic Severity
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: true, color: 'rgba(0,0,0,0.05)' } },
-                        y: { grid: { display: false } }
+                if (typeChart) typeChart.destroy();
+                typeChart = new Chart(typeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.by_type.labels.length > 0 ? data.by_type.labels : ['No Data'],
+                        datasets: [{
+                            data: data.by_type.data.length > 0 ? data.by_type.data : [1],
+                            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: { legend: { display: false } }
                     }
-                }
-            });
+                });
+
+                // By Severity Chart
+                const severityCtx = document.createElement('canvas');
+                document.getElementById('severityChart').innerHTML = '';
+                document.getElementById('severityChart').appendChild(severityCtx);
+
+                if (severityChart) severityChart.destroy();
+                severityChart = new Chart(severityCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.by_severity.labels.length > 0 ? data.by_severity.labels : ['No Data'],
+                        datasets: [{
+                            label: 'Count',
+                            data: data.by_severity.data.length > 0 ? data.by_severity.data : [0],
+                            backgroundColor: ['#17a2b8', '#ffc107', '#dc3545', '#343a40'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: true, color: 'rgba(0,0,0,0.05)' } },
+                            y: { grid: { display: false } }
+                        }
+                    }
+                });
+            } else {
+                console.error('Chart.js library not loaded');
+                document.getElementById('trendChart').innerHTML = '<div class="alert alert-warning">Chart library not loaded</div>';
+            }
 
         } catch (error) {
             console.error('Error loading trend charts:', error);
@@ -475,7 +503,7 @@
     // Load overview statistics
     async function loadOverviewStats() {
         try {
-            const response = await fetch('/api/tamper-detection/overview');
+            const response = await fetch(`/api/tamper-detection/overview?my_submissions=${showMyData}`);
             const data = await response.json();
 
             if (data.error) {
@@ -484,7 +512,7 @@
             }
 
             // Update statistics cards with real data
-            document.getElementById('totalDetections').textContent = data.statistics.total_detections || 0;
+            document.getElementById('totalDetections').textContent = data.statistics.total_submissions || 0;
             document.getElementById('pendingReview').textContent = data.statistics.pending_review || 0;
             document.getElementById('confirmedTamper').textContent = data.statistics.confirmed_tamper || 0;
             document.getElementById('suspiciousSubmissions').textContent = data.statistics.suspicious_submissions || 0;
@@ -499,7 +527,7 @@
     // Load recent tamper detections
     async function loadRecentDetections() {
         try {
-            const response = await fetch('/api/tamper-detection/overview');
+            const response = await fetch(`/api/tamper-detection/overview?my_submissions=${showMyData}`);
             const data = await response.json();
 
             const container = document.getElementById('recentDetections');
@@ -565,7 +593,7 @@
     // Load suspicious submissions
     async function loadSuspiciousSubmissions() {
         try {
-            const response = await fetch('/api/tamper-detection/overview');
+            const response = await fetch(`/api/tamper-detection/overview?my_submissions=${showMyData}`);
             const data = await response.json();
 
             const container = document.getElementById('suspiciousSubmissionsList');
@@ -612,7 +640,7 @@
     // Load agent alerts
     async function loadAgentAlerts() {
         try {
-            const response = await fetch('/api/tamper-detection/overview');
+            const response = await fetch(`/api/tamper-detection/overview?my_submissions=${showMyData}`);
             const data = await response.json();
 
             const container = document.getElementById('agentAlertsList');

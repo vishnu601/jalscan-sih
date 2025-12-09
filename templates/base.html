@@ -1348,31 +1348,11 @@ ${message}
 
     {% if current_user.is_authenticated %}
     <!-- JalHelp Chat Widget -->
-    <div class="gpt-chat-widget" id="gpt-chat-widget">
-        <div class="gpt-chat-header">
-            <div class="robot-avatar">🤖</div>
-            <div>
-                <h6>JalHelp</h6>
-                <small>Flood Safety Assistant</small>
-            </div>
-            <button class="gpt-chat-close" onclick="toggleJalScanGPT()">&times;</button>
-        </div>
-        <div class="gpt-chat-messages" id="gpt-messages">
-            <div class="gpt-message bot">
-                <div class="avatar"><i class="bi bi-robot"></i></div>
-                <div class="bubble">
-                    👋 Hello! I'm JalHelp, your flood safety assistant. Ask me about:
-                    <br>• Water levels at any site
-                    <br>• Flood risk predictions
-                    <br>• Safety recommendations
-                </div>
-            </div>
-        </div>
-        <div class="gpt-chat-input">
-            <input type="text" id="gpt-input" placeholder="Ask about flood risk..."
-                onkeypress="if(event.key==='Enter')sendToGPT()">
-            <button onclick="sendToGPT()"><i class="bi bi-send-fill"></i></button>
-        </div>
+    <div class="gpt-chat-widget" id="gpt-chat-widget" style="position: fixed; overflow: visible;">
+        <button onclick="toggleJalScanGPT()"
+            style="position: absolute; top: -12px; right: -12px; background: white; border: 1px solid #ddd; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10002; color: #555;">&times;</button>
+        <iframe src="https://www.chatbase.co/chatbot-iframe/0_hAvF9WRqw-rG8kgzYyk" width="100%"
+            style="flex: 1; border: none; border-radius: 16px;" frameborder="0"></iframe>
     </div>
 
     <!-- Floating GPT Button (for mobile/non-sidebar views) -->
@@ -1386,64 +1366,6 @@ ${message}
         function toggleJalScanGPT() {
             const widget = document.getElementById('gpt-chat-widget');
             widget.classList.toggle('active');
-            if (widget.classList.contains('active')) {
-                document.getElementById('gpt-input').focus();
-            }
-        }
-
-        function sendToGPT() {
-            const input = document.getElementById('gpt-input');
-            const message = input.value.trim();
-            if (!message) return;
-
-            const messagesDiv = document.getElementById('gpt-messages');
-
-            // Add user message
-            messagesDiv.innerHTML += `
-            <div class="gpt-message user">
-                <div class="bubble">${message}</div>
-            </div>
-        `;
-            input.value = '';
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-            // Add typing indicator
-            const typingId = 'typing-' + Date.now();
-            messagesDiv.innerHTML += `
-            <div class="gpt-message bot" id="${typingId}">
-                <div class="avatar"><i class="bi bi-robot"></i></div>
-                <div class="bubble"><em>Thinking...</em></div>
-            </div>
-        `;
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-            // Send to API
-            fetch('/api/jalscan-gpt/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: message })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById(typingId).remove();
-                    const response = data.response || data.error || 'Sorry, I could not process that.';
-                    messagesDiv.innerHTML += `
-                <div class="gpt-message bot">
-                    <div class="avatar"><i class="bi bi-robot"></i></div>
-                    <div class="bubble">${response.replace(/\n/g, '<br>')}</div>
-                </div>
-            `;
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                })
-                .catch(err => {
-                    document.getElementById(typingId).remove();
-                    messagesDiv.innerHTML += `
-                <div class="gpt-message bot">
-                    <div class="avatar"><i class="bi bi-robot"></i></div>
-                    <div class="bubble text-danger">Connection error. Please try again.</div>
-                </div>
-            `;
-                });
         }
 
         // Notification System

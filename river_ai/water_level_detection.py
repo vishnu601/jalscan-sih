@@ -156,7 +156,7 @@ class GeminiWaterLevelDetector:
                     'water_level': None,
                     'confidence': 0.0,
                     'is_valid': False,
-                    'reason': 'OpenCV is taking too long to process. Please try again.',
+                    'reason': 'AI analysis unavailable. Please try again.',
                     'suggestions': ['Try taking the photo again with better lighting', 'Ensure the gauge is clearly visible']
                 }
                 
@@ -203,3 +203,50 @@ class HybridWaterLevelDetector(GeminiWaterLevelDetector):
     def __init__(self, pixels_per_cm: float = 10.0, use_gemini: bool = True):
         super().__init__()
         # pixels_per_cm and use_gemini ignored - always uses Gemini
+
+
+def detect_from_base64(base64_string: str, site_config: Optional[Dict] = None) -> Dict:
+    """
+    Detect water level from base64 string.
+    
+    Args:
+        base64_string: Base64 encoded image data
+        site_config: Optional site configuration
+        
+    Returns:
+        Detection result dictionary
+    """
+    import base64
+    import tempfile
+    
+    try:
+        # Handle data URL prefix
+        if ',' in base64_string:
+            base64_string = base64_string.split(',')[1]
+            
+        # Decode image
+        image_data = base64.b64decode(base64_string)
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp:
+            temp.write(image_data)
+            temp_path = temp.name
+            
+        try:
+            # Process using detector
+            result = detect_water_level(temp_path, site_config)
+            return result
+        finally:
+            # Cleanup
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    except Exception as e:
+        logger.error(f"Error processing base64 image: {e}")
+        return {
+            'water_level': None,
+            'confidence': 0.0,
+            'is_valid': False,
+            'reason': f"Processing error: {str(e)}",
+            'error': str(e)
+        }
