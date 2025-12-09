@@ -23,6 +23,17 @@
                     <h6 class="mb-0"><i class="bi bi-geo-alt"></i> <span data-i18n="location">Location</span></h6>
                 </div>
                 <div class="card-body">
+                    <!-- Site Selector -->
+                    <div class="mb-3">
+                        <label for="siteSelector" class="form-label"><i class="bi bi-pin-map"></i> Select Monitoring
+                            Site</label>
+                        <select class="form-select" id="siteSelector">
+                            <option value="">-- Select a Site --</option>
+                        </select>
+                    </div>
+
+                    <hr class="my-3">
+
                     <div class="alert alert-info py-2 mb-3">
                         <i class="bi bi-hand-index-thumb"></i> <small data-i18n="click_map_hint">Click on the map to
                             select a location</small>
@@ -42,10 +53,51 @@
                             value="2">
                         <div class="text-center"><span id="waterLevelValue">2.0</span> m</div>
                     </div>
-                    <button id="generateBtn" class="btn btn-primary w-100">
+                    <div class="mb-3">
+                        <label for="hoursAhead" class="form-label"><i class="bi bi-clock-history"></i> Prediction Hours
+                            Ahead</label>
+                        <input type="range" class="form-range" id="hoursAhead" min="6" max="72" step="6" value="24">
+                        <div class="text-center"><span id="hoursAheadValue">24</span> hours</div>
+                    </div>
+                    <button id="generateBtn" class="btn btn-primary w-100 mb-2">
                         <i class="bi bi-play-fill"></i> <span data-i18n="generate_flood">Generate Flood
                             Simulation</span>
                     </button>
+                    <button id="predictFromSiteBtn" class="btn btn-outline-primary w-100" disabled>
+                        <i class="bi bi-graph-up-arrow"></i> Predict from Site Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rate of Rise & Thresholds Card -->
+            <div class="card mb-3">
+                <div class="card-header bg-warning bg-opacity-25">
+                    <h6 class="mb-0"><i class="bi bi-graph-up"></i> Rate of Rise & Thresholds</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-2">
+                            <div class="fs-5 fw-bold text-info" id="rateOfRise">--</div>
+                            <small class="text-muted">Rate (m/hr)</small>
+                        </div>
+                        <div class="col-6 mb-2">
+                            <div class="fs-5 fw-bold text-primary" id="predictedDelta">--</div>
+                            <small class="text-muted">Δh Predicted</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="fs-5 fw-bold text-warning" id="warningLevel">--</div>
+                            <small class="text-muted">Warning (m)</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="fs-5 fw-bold text-danger" id="dangerLevel">--</div>
+                            <small class="text-muted">Danger (m)</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="alert py-2 mb-0" id="severityAlert" style="display: none;">
+                            <strong id="severityMessage">--</strong>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -136,6 +188,20 @@
         const loadingOverlay = document.getElementById('loadingOverlay');
         const statusBadge = document.getElementById('statusBadge');
         const coordsDisplay = document.getElementById('coordsDisplay');
+
+        // New elements
+        const hoursSlider = document.getElementById('hoursAhead');
+        const hoursValue = document.getElementById('hoursAheadValue');
+        const siteSelector = document.getElementById('siteSelector');
+        const predictFromSiteBtn = document.getElementById('predictFromSiteBtn');
+        const rateOfRiseEl = document.getElementById('rateOfRise');
+        const predictedDeltaEl = document.getElementById('predictedDelta');
+        const warningLevelEl = document.getElementById('warningLevel');
+        const dangerLevelEl = document.getElementById('dangerLevel');
+        const severityAlert = document.getElementById('severityAlert');
+        const severityMessage = document.getElementById('severityMessage');
+
+        let selectedSiteId = null;
 
         // Initialize Leaflet Map centered on India
         const map = L.map('floodMap').setView([20.5937, 78.9629], 5);
@@ -403,8 +469,174 @@
         // Button click handler
         generateBtn.addEventListener('click', generateFlood);
 
+        // Hours slider handler
+        hoursSlider.addEventListener('input', function () {
+            hoursValue.textContent = this.value;
+        });
+
+        // Load monitoring sites for dropdown
+        async function loadMonitoringSites() {
+            try {
+                const response = await fetch('/api/flood/sites');
+                const data = await response.json();
+
+                if (data.success && data.sites) {
+                    siteSelector.innerHTML = '<option value="">-- Select a Site --</option>';
+                    data.sites.forEach(site => {
+                        const option = document.createElement('option');
+                        option.value = site.id;
+                        option.textContent = `${site.name} (${site.river_code || 'N/A'})`;
+                        option.dataset.lat = site.lat;
+                        option.dataset.lon = site.lon;
+                        option.dataset.threshold = site.flood_threshold || 10;
+                        siteSelector.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading sites:', error);
+            }
+        }
+
+        // Site selector change handler
+        siteSelector.addEventListener('change', function () {
+            const option = this.options[this.selectedIndex];
+            if (option.value) {
+                selectedSiteId = parseInt(option.value);
+                const lat = parseFloat(option.dataset.lat);
+                const lon = parseFloat(option.dataset.lon);
+                const threshold = parseFloat(option.dataset.threshold);
+
+                // Update inputs
+                latInput.value = lat.toFixed(4);
+                lonInput.value = lon.toFixed(4);
+
+                // Update map
+                map.setView([lat, lon], 12);
+                coordsDisplay.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+                // Update marker
+                if (locationMarker) {
+                    locationMarker.setLatLng([lat, lon]);
+                } else {
+                    locationMarker = L.marker([lat, lon], { draggable: true }).addTo(map);
+                }
+
+                // Update threshold display
+                dangerLevelEl.textContent = threshold.toFixed(1);
+                warningLevelEl.textContent = (threshold * 0.7).toFixed(1);
+
+                // Enable predict from site button
+                predictFromSiteBtn.disabled = false;
+            } else {
+                selectedSiteId = null;
+                predictFromSiteBtn.disabled = true;
+            }
+        });
+
+        // Predict from Site Data
+        async function predictFromSite() {
+            if (!selectedSiteId) {
+                alert('Please select a site first');
+                return;
+            }
+
+            loadingOverlay.classList.remove('d-none');
+            statusBadge.textContent = 'Predicting...';
+            statusBadge.className = 'badge bg-warning';
+            predictFromSiteBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/flood/predict-from-site', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        site_id: selectedSiteId,
+                        hours_ahead: parseInt(hoursSlider.value)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update map view
+                    map.setView([data.site.lat, data.site.lon], 13);
+
+                    // Remove old overlay
+                    if (floodOverlay) {
+                        map.removeLayer(floodOverlay);
+                    }
+
+                    // Add flood image overlay
+                    const bounds = data.overlay_bounds;
+                    const imageBounds = [
+                        [bounds.south, bounds.west],
+                        [bounds.north, bounds.east]
+                    ];
+
+                    floodOverlay = L.imageOverlay(
+                        'data:image/png;base64,' + data.image_base64,
+                        imageBounds,
+                        { opacity: 0.7 }
+                    ).addTo(map);
+
+                    // Update rate of rise display
+                    if (data.prediction.rate_of_rise_m_hr !== null) {
+                        rateOfRiseEl.textContent = data.prediction.rate_of_rise_m_hr.toFixed(3);
+                    } else {
+                        rateOfRiseEl.textContent = 'N/A';
+                    }
+                    predictedDeltaEl.textContent = '+' + data.prediction.delta_h.toFixed(2) + 'm';
+
+                    // Update severity
+                    warningLevelEl.textContent = data.severity.warning_level.toFixed(1);
+                    dangerLevelEl.textContent = data.severity.danger_level.toFixed(1);
+
+                    // Show severity alert
+                    severityAlert.style.display = 'block';
+                    severityAlert.className = `alert py-2 mb-0 alert-${data.severity.severity === 'danger' ? 'danger' :
+                            data.severity.severity === 'warning' ? 'warning' :
+                                data.severity.severity === 'elevated' ? 'warning' : 'success'
+                        }`;
+                    severityMessage.textContent = data.severity.message;
+
+                    // Update statistics
+                    const stats = data.statistics;
+                    document.getElementById('statArea').textContent = stats.flooded_area_km2?.toFixed(2) || '--';
+                    document.getElementById('statPercent').textContent = stats.flooded_percentage?.toFixed(1) + '%' || '--';
+                    document.getElementById('statMaxDepth').textContent = stats.max_depth_m?.toFixed(1) || '--';
+                    document.getElementById('statMeanDepth').textContent = stats.mean_depth_m?.toFixed(1) || '--';
+
+                    // Update popup
+                    if (locationMarker) {
+                        locationMarker.bindPopup(`
+                            <strong>${data.site.name}</strong><br>
+                            Prediction: +${data.prediction.delta_h.toFixed(2)}m in ${data.prediction.hours_ahead}h<br>
+                            Rate: ${data.prediction.rate_of_rise_m_hr?.toFixed(3) || 'N/A'} m/hr<br>
+                            <span class="text-${data.severity.severity === 'danger' ? 'danger' : 'success'}">${data.severity.message}</span>
+                        `).openPopup();
+                    }
+
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.className = 'badge bg-success';
+                } else {
+                    throw new Error(data.error || 'Prediction failed');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                statusBadge.textContent = 'Error';
+                statusBadge.className = 'badge bg-danger';
+                alert('Error: ' + error.message);
+            } finally {
+                loadingOverlay.classList.add('d-none');
+                predictFromSiteBtn.disabled = false;
+            }
+        }
+
+        predictFromSiteBtn.addEventListener('click', predictFromSite);
+
         // Initialize
         loadScenarios();
+        loadMonitoringSites();
     });
 </script>
 {% endblock %}

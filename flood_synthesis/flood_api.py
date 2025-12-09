@@ -22,6 +22,10 @@ from PIL import Image
 
 from .physics_engine import FloodMaskGenerator, generate_synthetic_dem
 from .model import create_simple_flood_overlay
+from .hydrology import (
+    compute_rate_of_rise, predict_delta_h, create_flood_polygon,
+    polygon_to_geojson, get_flood_severity
+)
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +390,151 @@ def get_demo_scenario(scenario_id: str):
         'statistics': stats,
         'overlay_bounds': overlay_bounds
     })
+
+
+@flood_bp.route('/predict-from-site', methods=['POST'])
+def predict_from_site():
+    """
+    Predict flood based on a monitoring site's real submission data.
+    
+    Uses rate-of-rise from latest submissions and site thresholds.
+    
+    Request JSON:
+    {
+        "site_id": int,
+        "hours_ahead": int (default 24)
+    }
+    """
+    try:
+        # Import models here to avoid circular imports
+        from models import MonitoringSite, WaterLevelSubmission
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        site_id = data.get('site_id')
+        hours_ahead = int(data.get('hours_ahead', 24))
+        
+        if not site_id:
+            return jsonify({'success': False, 'error': 'site_id is required'}), 400
+        
+        # Fetch site info
+        site = MonitoringSite.query.get(site_id)
+        if not site:
+            return jsonify({'success': False, 'error': 'Site not found'}), 404
+        
+        # Fetch latest 2 submissions for rate-of-rise
+        submissions = WaterLevelSubmission.query.filter_by(
+            site_id=site_id
+        ).order_by(WaterLevelSubmission.timestamp.desc()).limit(2).all()
+        
+        if not submissions:
+            return jsonify({'success': False, 'error': 'No submissions found for this site'}), 404
+        
+        current_level = submissions[0].water_level
+        current_ts = submissions[0].timestamp.isoformat()
+        
+        # Calculate rate of rise if we have 2 readings
+        rate_of_rise = None
+        if len(submissions) >= 2:
+            old_level = submissions[1].water_level
+            old_ts = submissions[1].timestamp.isoformat()
+            rate_of_rise = compute_rate_of_rise(old_level, old_ts, current_level, current_ts)
+        
+        # Get thresholds (use site flood_threshold or defaults)
+        warning_level = (site.flood_threshold or 10.0) * 0.7  # 70% of danger as warning
+        danger_level = site.flood_threshold or 10.0
+        
+        # Predict delta_h
+        delta_h, prediction_basis = predict_delta_h(
+            rate_of_rise=rate_of_rise,
+            hours_ahead=hours_ahead,
+            current_level=current_level,
+            warning_level=warning_level,
+            danger_level=danger_level
+        )
+        
+        # Get flood severity info
+        severity_info = get_flood_severity(
+            current_level=current_level,
+            warning_level=warning_level,
+            danger_level=danger_level,
+            predicted_delta=delta_h
+        )
+        
+        # Generate flood polygon
+        polygon = create_flood_polygon(site.latitude, site.longitude, delta_h)
+        geojson = polygon_to_geojson(polygon)
+        
+        # Generate flood image visualization
+        water_level_rise = max(0.5, delta_h)  # Minimum for visualization
+        flood_image, stats = generate_demo_flood_image(site.latitude, site.longitude, water_level_rise)
+        
+        # Save and get URL
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'flood_site_{site_id}_{timestamp_str}.png'
+        image_url = save_generated_image(flood_image, filename)
+        
+        # Calculate overlay bounds
+        delta = 0.045
+        overlay_bounds = {
+            'north': site.latitude + delta,
+            'south': site.latitude - delta,
+            'east': site.longitude + delta,
+            'west': site.longitude - delta
+        }
+        
+        return jsonify({
+            'success': True,
+            'site': {
+                'id': site.id,
+                'name': site.name,
+                'lat': site.latitude,
+                'lon': site.longitude,
+                'river_code': site.river_code
+            },
+            'prediction': {
+                'hours_ahead': hours_ahead,
+                'delta_h': delta_h,
+                'prediction_basis': prediction_basis,
+                'rate_of_rise_m_hr': rate_of_rise
+            },
+            'severity': severity_info,
+            'geojson': geojson,
+            'image_url': image_url,
+            'image_base64': image_to_base64(flood_image),
+            'statistics': stats,
+            'overlay_bounds': overlay_bounds
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error in predict-from-site: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@flood_bp.route('/sites', methods=['GET'])
+def get_monitoring_sites():
+    """Get all monitoring sites for the site selector dropdown."""
+    try:
+        from models import MonitoringSite
+        
+        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        
+        return jsonify({
+            'success': True,
+            'sites': [{
+                'id': s.id,
+                'name': s.name,
+                'lat': s.latitude,
+                'lon': s.longitude,
+                'river_code': s.river_code,
+                'flood_threshold': s.flood_threshold
+            } for s in sites]
+        })
+    except Exception as e:
+        logger.exception(f"Error fetching sites: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @flood_bp.route('/status', methods=['GET'])
