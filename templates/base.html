@@ -857,6 +857,67 @@ ${message}
                     modal.style.touchAction = 'auto';
                 });
 
+                // CRITICAL: Fix for mobile bottom nav links and dropdowns
+                if (isMobile || isPWA) {
+                    // Handle direct nav links (Dashboard, Capture, Submissions)
+                    const navLinks = document.querySelectorAll('#mobile-nav > .container-fluid > .d-flex > a.nav-link');
+                    navLinks.forEach(function (link) {
+                        link.addEventListener('touchend', function (e) {
+                            e.preventDefault();
+                            const href = this.getAttribute('href');
+                            if (href && href !== '#') {
+                                console.log('[NavLink] Navigating to:', href);
+                                window.location.href = href;
+                            }
+                        }, { passive: false });
+                    });
+
+                    // Handle dropdown toggles (More, Profile)
+                    const dropdownToggles = document.querySelectorAll('#mobile-nav .dropdown-toggle');
+                    dropdownToggles.forEach(function (toggle) {
+                        toggle.addEventListener('touchend', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('[Dropdown] Toggle touched');
+
+                            // Close all other dropdowns first
+                            document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(function (menu) {
+                                if (menu !== toggle.nextElementSibling) {
+                                    menu.classList.remove('show');
+                                }
+                            });
+
+                            // Toggle this dropdown
+                            const menu = this.nextElementSibling;
+                            if (menu && menu.classList.contains('dropdown-menu')) {
+                                menu.classList.toggle('show');
+                            }
+                        }, { passive: false });
+                    });
+
+                    // Handle dropdown items
+                    const dropdownItems = document.querySelectorAll('#mobile-nav .dropdown-item');
+                    dropdownItems.forEach(function (item) {
+                        item.addEventListener('touchend', function (e) {
+                            e.preventDefault();
+                            const href = this.getAttribute('href');
+                            if (href && href !== '#') {
+                                console.log('[DropdownItem] Navigating to:', href);
+                                window.location.href = href;
+                            }
+                        }, { passive: false });
+                    });
+
+                    // Close dropdowns when tapping outside
+                    document.addEventListener('touchend', function (e) {
+                        if (!e.target.closest('#mobile-nav .dropdown')) {
+                            document.querySelectorAll('#mobile-nav .dropdown-menu.show').forEach(function (menu) {
+                                menu.classList.remove('show');
+                            });
+                        }
+                    }, { passive: true });
+                }
+
                 // Debug: Log all click events to verify they're firing
                 if (isPWA || isMobile) {
                     document.body.addEventListener('click', function (e) {
