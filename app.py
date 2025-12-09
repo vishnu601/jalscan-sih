@@ -1789,23 +1789,40 @@ def create_app(config_name='default'):
                         'confidence': result.get('confidence', 0),
                         'is_valid': result.get('is_valid', False),
                         'message': result.get('reason', ''),
-                        'method': result.get('method', 'unknown'),
+                        'reason': result.get('reason', ''),
+                        'method': result.get('method', 'gemini'),
                         'requires_voice_fallback': result.get('requires_voice_fallback', False),
                         'conditions': {
                             'is_night': conditions.get('is_night', False),
                             'is_rainy': conditions.get('is_rainy_blurry', False),
                             'is_far': conditions.get('is_far', False)
                         },
-                        'processing_time_ms': result.get('total_time_ms', 0)
+                        'processing_time_ms': result.get('total_time_ms', 0),
+                        # New enhanced fields
+                        'gauge_location': result.get('gauge_location'),
+                        'water_line_position': result.get('water_line_position'),
+                        'tamper_detected': result.get('tamper_detected', False),
+                        'tamper_reason': result.get('tamper_reason'),
+                        'image_quality': result.get('image_quality', 'unknown'),
+                        'suggestions': result.get('suggestions', [])
                     })
                 else:
                     return jsonify({
                         'success': False,
                         'error': result.get('error', 'Detection failed'),
+                        'reason': result.get('reason', 'Could not read gauge'),
                         'water_level': None,
                         'confidence': 0,
                         'is_valid': False,
-                        'requires_voice_fallback': True
+                        'requires_voice_fallback': True,
+                        'method': result.get('method', 'gemini'),
+                        # Include enhanced fields for error case too
+                        'gauge_location': result.get('gauge_location'),
+                        'water_line_position': result.get('water_line_position'),
+                        'tamper_detected': result.get('tamper_detected', False),
+                        'tamper_reason': result.get('tamper_reason'),
+                        'image_quality': result.get('image_quality', 'unknown'),
+                        'suggestions': result.get('suggestions', [])
                     })
                     
             except ImportError as e:
