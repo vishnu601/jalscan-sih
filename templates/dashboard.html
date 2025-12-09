@@ -327,7 +327,9 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
-                            {% if current_user.has_permission('can_view_all_submissions') %}
+                            {% if current_user.role == 'central_analyst' %}
+                            <span data-i18n="assigned_submissions">Assigned Site Submissions</span>
+                            {% elif current_user.has_permission('can_view_all_submissions') %}
                             <span data-i18n="recent_submissions">Recent Submissions</span>
                             {% else %}
                             <span data-i18n="my_recent_submissions">My Recent Submissions</span>
