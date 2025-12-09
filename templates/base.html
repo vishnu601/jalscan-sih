@@ -857,71 +857,70 @@ ${message}
                     modal.style.touchAction = 'auto';
                 });
 
-                // CRITICAL: Fix for mobile bottom nav links and dropdowns
-                // CRITICAL: Fix for mobile bottom nav links and dropdowns
-                if (isMobile || isPWA) {
-                    // Reusable function to handle mobile interactions
-                    const handleMobileInteraction = function (e, containerId) {
-                        // We only care about clicks inside the specific container
-                        const container = document.getElementById(containerId);
-                        if (!container || !container.contains(e.target)) return;
-
-                        const link = e.target.closest('a, button'); // Also handle button elements
-                        if (!link) return;
-
-                        // 1. Dropdown Toggles
-                        if (link.classList.contains('dropdown-toggle')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('[MobileInteraction] Toggle:', link.id);
-
-                            const parent = link.closest('.dropup, .dropdown');
-                            const menu = parent.querySelector('.dropdown-menu');
-                            const isShown = menu.classList.contains('show');
-
-                            // Close all other menus first (global cleanup)
-                            document.querySelectorAll('.mobile-bottom-dropdown.show, .mobile-dropdown.show').forEach(m => {
-                                if (m !== menu) m.classList.remove('show');
-                            });
-
-                            // Toggle this menu
-                            if (isShown) {
-                                menu.classList.remove('show');
-                            } else {
-                                menu.classList.add('show');
-                            }
-                        }
-                        // 2. Dropdown Items
-                        else if (link.classList.contains('dropdown-item')) {
-                            const href = link.getAttribute('href');
-                            if (href && href !== '#') {
-                                console.log('[MobileInteraction] Item:', href);
-                                // Allow default or force if needed
-                            }
-                        }
-                        // 3. Regular Tabs
-                        else if (link.classList.contains('nav-link')) {
-                            console.log('[MobileInteraction] Tab:', link.getAttribute('href'));
-                        }
-                    };
-
-                    // Attach listener to document once to handle both header and footer
-                    document.addEventListener('click', function (e) {
-                        // Close menus when clicking outside
-                        const isHeader = e.target.closest('#mobile-header');
-                        const isFooter = e.target.closest('#mobile-nav');
-
-                        if (!isHeader && !isFooter) {
-                            document.querySelectorAll('.mobile-bottom-dropdown.show, .mobile-dropdown.show').forEach(m => {
-                                m.classList.remove('show');
-                            });
+                // CRITICAL: Fix for mobile/PWA dropdown toggles
+                // Always enable custom toggle handling to ensure it works on all devices
+                (function () {
+                    // Handler for all mobile dropdowns (header + footer)
+                    function toggleDropdown(toggleElement) {
+                        const parent = toggleElement.closest('.dropup, .dropdown');
+                        if (!parent) {
+                            console.log('[Dropdown] No parent found');
                             return;
                         }
 
-                        if (isHeader) handleMobileInteraction(e, 'mobile-header');
-                        if (isFooter) handleMobileInteraction(e, 'mobile-nav');
-                    });
-                }
+                        const menu = parent.querySelector('.dropdown-menu');
+                        if (!menu) {
+                            console.log('[Dropdown] No menu found');
+                            return;
+                        }
+
+                        const isShown = menu.classList.contains('show');
+                        console.log('[Dropdown] Current state:', isShown ? 'open' : 'closed');
+
+                        // Close all other open dropdowns
+                        document.querySelectorAll('#mobile-header .dropdown-menu.show, #mobile-nav .dropdown-menu.show').forEach(m => {
+                            if (m !== menu) {
+                                m.classList.remove('show');
+                            }
+                        });
+
+                        // Toggle this dropdown
+                        if (isShown) {
+                            menu.classList.remove('show');
+                        } else {
+                            menu.classList.add('show');
+                        }
+                    }
+
+                    // Listen for clicks on the entire document
+                    document.addEventListener('click', function (e) {
+                        const toggle = e.target.closest('#mobile-header .dropdown-toggle, #mobile-nav .dropdown-toggle');
+
+                        if (toggle) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('[Dropdown] Toggle clicked:', toggle.id || toggle.className);
+                            toggleDropdown(toggle);
+                            return;
+                        }
+
+                        // If clicking a dropdown item, let default happen but close menu after
+                        const dropdownItem = e.target.closest('#mobile-header .dropdown-item, #mobile-nav .dropdown-item');
+                        if (dropdownItem) {
+                            console.log('[Dropdown] Item clicked:', dropdownItem.textContent.trim());
+                            // Don't prevent default - let navigation happen
+                            return;
+                        }
+
+                        // Close all dropdowns when clicking outside
+                        const isInsideDropdown = e.target.closest('#mobile-header .dropdown, #mobile-nav .dropdown, #mobile-nav .dropup');
+                        if (!isInsideDropdown) {
+                            document.querySelectorAll('#mobile-header .dropdown-menu.show, #mobile-nav .dropdown-menu.show').forEach(m => {
+                                m.classList.remove('show');
+                            });
+                        }
+                    }, true); // Use capture phase to run before Bootstrap
+                })();
 
                 // Debug: Log all click events to verify they're firing
                 if (isPWA || isMobile) {
