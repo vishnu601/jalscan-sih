@@ -73,8 +73,8 @@ def analyze_water_gauge(image_path):
     try:
         genai.configure(api_key=api_key)
         
-        # Use gemini-1.5-flash for vision tasks
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use gemini-2.5-flash-lite for vision tasks
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         # Load the image
         img = Image.open(image_path)
