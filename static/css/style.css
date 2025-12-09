@@ -844,6 +844,7 @@ html {
     font-size: 0.875rem;
     z-index: 10000;
     display: none;
+    pointer-events: none;
 }
 
 body.offline .offline-indicator {

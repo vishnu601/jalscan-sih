@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JalScan - Water Level Tracker</title>
 
     <!-- PWA Meta Tags -->
@@ -795,47 +795,74 @@ ${message}
     <!-- Mobile/PWA Touch Event Fixes -->
     <script>
         (function () {
+            'use strict';
+
             // Detect if running as PWA
             const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
                 window.navigator.standalone === true;
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
             if (isPWA) {
                 console.log('[PWA] Running in standalone mode');
             }
+            if (isMobile) {
+                console.log('[Mobile] Mobile device detected');
+            }
 
-            // Fix for iOS/PWA touch events not firing
+            // Critical: Register empty touchstart to enable touch events on iOS
             document.addEventListener('touchstart', function () { }, { passive: true });
 
-            // Ensure buttons respond to touch on mobile
+            // Polyfill for click events on mobile - trigger click on touchend
             document.addEventListener('DOMContentLoaded', function () {
-                // Add active states on touch for better feedback
-                const touchableElements = document.querySelectorAll('button, .btn, a, [role="button"]');
 
-                touchableElements.forEach(function (el) {
-                    el.addEventListener('touchstart', function (e) {
-                        this.classList.add('active');
-                    }, { passive: true });
+                // For all clickable elements, ensure touch works
+                document.body.addEventListener('touchend', function (e) {
+                    const target = e.target.closest('button, .btn, a, input[type="submit"], input[type="button"], [role="button"], [onclick]');
+                    if (target && !e.defaultPrevented) {
+                        // Small delay to let the native click fire first
+                        setTimeout(function () {
+                            // Only trigger if element is still in DOM and not disabled
+                            if (document.contains(target) && !target.disabled) {
+                                console.log('[Touch] Touchend on:', target.tagName, target.className);
+                            }
+                        }, 10);
+                    }
+                }, { passive: true });
 
-                    el.addEventListener('touchend', function (e) {
-                        this.classList.remove('active');
-                    }, { passive: true });
+                // Add visual feedback for touch
+                document.body.addEventListener('touchstart', function (e) {
+                    const target = e.target.closest('button, .btn, a, [role="button"]');
+                    if (target) {
+                        target.classList.add('active');
+                    }
+                }, { passive: true });
 
-                    el.addEventListener('touchcancel', function (e) {
-                        this.classList.remove('active');
-                    }, { passive: true });
-                });
+                document.body.addEventListener('touchend', function (e) {
+                    const target = e.target.closest('button, .btn, a, [role="button"]');
+                    if (target) {
+                        target.classList.remove('active');
+                    }
+                }, { passive: true });
 
-                // Fix for modals in PWA
+                document.body.addEventListener('touchcancel', function (e) {
+                    const target = e.target.closest('button, .btn, a, [role="button"]');
+                    if (target) {
+                        target.classList.remove('active');
+                    }
+                }, { passive: true });
+
+                // Fix for modals in PWA - ensure they receive touch events
                 const modals = document.querySelectorAll('.modal');
                 modals.forEach(function (modal) {
-                    modal.addEventListener('touchmove', function (e) {
-                        // Allow scrolling inside modal body
-                        const modalBody = modal.querySelector('.modal-body');
-                        if (modalBody && modalBody.contains(e.target)) {
-                            e.stopPropagation();
-                        }
-                    }, { passive: true });
+                    modal.style.touchAction = 'auto';
                 });
+
+                // Debug: Log all click events to verify they're firing
+                if (isPWA || isMobile) {
+                    document.body.addEventListener('click', function (e) {
+                        console.log('[Click] Clicked:', e.target.tagName, e.target.className);
+                    }, { capture: true });
+                }
             });
         })();
     </script>
