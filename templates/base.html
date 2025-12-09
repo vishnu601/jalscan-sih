@@ -87,12 +87,14 @@
 
 
 
-                {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
+                {% if current_user.role in ['supervisor', 'admin'] %}
                 <a href="{{ url_for('cloud_dashboard') }}"
                     class="sidebar-nav-item {{ 'active' if request.endpoint == 'cloud_dashboard' }}">
                     <i class="bi bi-cloud-fill"></i>
                     <span class="nav-text" data-i18n="cloud_dashboard">Cloud Dashboard</span>
                 </a>
+                {% endif %}
+                {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
                 <a href="{{ url_for('admin_tamper_detection') }}"
                     class="sidebar-nav-item {{ 'active' if request.endpoint == 'admin_tamper_detection' }}">
                     <i class="bi bi-shield-check"></i>
@@ -393,12 +395,14 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark mobile-bottom-dropdown"
                         aria-labelledby="mobileMoreDropdown">
-                        {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
+                        {% if current_user.role in ['supervisor', 'admin'] %}
                         <li>
                             <a class="dropdown-item" href="{{ url_for('cloud_dashboard') }}">
                                 <i class="bi bi-cloud-fill me-2"></i>Cloud Dashboard
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.role in ['supervisor', 'admin', 'central_analyst'] %}
                         <li>
                             <a class="dropdown-item" href="{{ url_for('admin_tamper_detection') }}">
                                 <i class="bi bi-shield-check me-2"></i>Tamper Detection

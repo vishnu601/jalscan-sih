@@ -135,16 +135,57 @@ def create_app(config_name='default'):
         """Offline fallback page - no auth required"""
         return render_template('offline.html')
 
+    def get_analyst_assigned_sites():
+        """Get sites assigned to the current analyst user via UserSite table"""
+        if current_user.role == 'central_analyst':
+            return MonitoringSite.query.join(UserSite).filter(
+                UserSite.user_id == current_user.id,
+                MonitoringSite.is_active == True
+            ).all()
+        return None  # For admin/supervisor, return None to indicate "all sites"
+
+    def get_analyst_site_ids():
+        """Get list of site IDs assigned to current analyst"""
+        if current_user.role == 'central_analyst':
+            sites = UserSite.query.filter_by(user_id=current_user.id).all()
+            return [s.site_id for s in sites]
+        return None  # For admin/supervisor, return None to indicate "all sites"
+
     @app.route('/dashboard')
     @login_required
     def dashboard():
-        # Get user's assigned sites
-        if current_user.has_permission('can_view_all_submissions'):
-            # Supervisors and analysts can see all submissions
+        # Get user's assigned sites based on role
+        if current_user.role == 'admin' or current_user.role == 'supervisor':
+            # Admin/Supervisor see all sites and submissions
             recent_submissions = WaterLevelSubmission.query.order_by(
                 WaterLevelSubmission.timestamp.desc()
             ).limit(10).all()
             assigned_sites = MonitoringSite.query.filter_by(is_active=True).all()
+            total_submissions = WaterLevelSubmission.query.count()
+            pending_sync = WaterLevelSubmission.query.filter_by(sync_status='pending').count()
+            public_pending = PublicImageSubmission.query.filter_by(status='pending').count()
+            total_users = User.query.filter_by(is_active=True).count()
+        elif current_user.role == 'central_analyst':
+            # Analyst sees only assigned sites
+            assigned_sites = get_analyst_assigned_sites() or []
+            site_ids = [s.id for s in assigned_sites]
+            if site_ids:
+                recent_submissions = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.site_id.in_(site_ids)
+                ).order_by(WaterLevelSubmission.timestamp.desc()).limit(10).all()
+                total_submissions = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.site_id.in_(site_ids)
+                ).count()
+                pending_sync = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.site_id.in_(site_ids),
+                    WaterLevelSubmission.sync_status == 'pending'
+                ).count()
+            else:
+                recent_submissions = []
+                total_submissions = 0
+                pending_sync = 0
+            public_pending = 0
+            total_users = 0
         else:
             # Field agents can only see their submissions and assigned sites
             assigned_sites = MonitoringSite.query.join(UserSite).filter(
@@ -153,14 +194,6 @@ def create_app(config_name='default'):
             recent_submissions = WaterLevelSubmission.query.filter_by(
                 user_id=current_user.id
             ).order_by(WaterLevelSubmission.timestamp.desc()).limit(5).all()
-        
-        # Get dashboard stats based on role
-        if current_user.has_permission('can_view_all_submissions'):
-            total_submissions = WaterLevelSubmission.query.count()
-            pending_sync = WaterLevelSubmission.query.filter_by(sync_status='pending').count()
-            public_pending = PublicImageSubmission.query.filter_by(status='pending').count()
-            total_users = User.query.filter_by(is_active=True).count()
-        else:
             total_submissions = WaterLevelSubmission.query.filter_by(user_id=current_user.id).count()
             pending_sync = WaterLevelSubmission.query.filter_by(user_id=current_user.id, sync_status='pending').count()
             public_pending = 0
@@ -1341,12 +1374,34 @@ def create_app(config_name='default'):
         page = request.args.get('page', 1, type=int)
         per_page = 20
         
-        if current_user.has_permission('can_view_all_submissions'):
-            # Supervisors and analysts can see all submissions
+        # Role-based query filtering
+        if current_user.role == 'admin' or current_user.role == 'supervisor':
+            # Admin/Supervisor see all submissions
             query = WaterLevelSubmission.query
+            sites = MonitoringSite.query.filter_by(is_active=True).all()
+            users = User.query.filter_by(is_active=True).all()
+        elif current_user.role == 'central_analyst':
+            # Analyst sees only assigned sites' submissions
+            analyst_site_ids = get_analyst_site_ids() or []
+            if analyst_site_ids:
+                query = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.site_id.in_(analyst_site_ids)
+                )
+                sites = MonitoringSite.query.filter(
+                    MonitoringSite.id.in_(analyst_site_ids),
+                    MonitoringSite.is_active == True
+                ).all()
+            else:
+                query = WaterLevelSubmission.query.filter(WaterLevelSubmission.id == -1)  # Empty result
+                sites = []
+            users = []  # Analysts don't filter by user
         else:
             # Field agents can only see their own submissions
             query = WaterLevelSubmission.query.filter_by(user_id=current_user.id)
+            sites = MonitoringSite.query.join(UserSite).filter(
+                UserSite.user_id == current_user.id
+            ).all()
+            users = []
         
         # Add filters if provided
         site_id = request.args.get('site_id', type=int)
@@ -1354,7 +1409,7 @@ def create_app(config_name='default'):
             query = query.filter_by(site_id=site_id)
         
         user_id = request.args.get('user_id', type=int)
-        if user_id and current_user.has_permission('can_view_all_submissions'):
+        if user_id and current_user.role in ['admin', 'supervisor']:
             query = query.filter_by(user_id=user_id)
         
         date_from = request.args.get('date_from')
@@ -1367,10 +1422,6 @@ def create_app(config_name='default'):
         submissions = query.order_by(WaterLevelSubmission.timestamp.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
-        
-        # Get available sites and users for filters
-        sites = MonitoringSite.query.filter_by(is_active=True).all()
-        users = User.query.filter_by(is_active=True).all() if current_user.has_permission('can_view_all_submissions') else []
         
         return render_template('submissions.html', 
                              submissions=submissions,
@@ -2256,37 +2307,84 @@ def create_app(config_name='default'):
     @login_required
     @role_required(['supervisor', 'admin', 'central_analyst'])
     def tamper_detection_overview():
-        """API for tamper detection overview"""
+        """API for tamper detection overview - filtered by role"""
         try:
-            # Get recent tamper detections
-            recent_detections = TamperDetection.query.order_by(
-                TamperDetection.detected_at.desc()
-            ).limit(20).all()
+            # Role-based site filtering for analyst
+            analyst_site_ids = None
+            if current_user.role == 'central_analyst':
+                analyst_site_ids = get_analyst_site_ids() or []
             
-            # Get statistics from TamperDetection table
-            total_detections = TamperDetection.query.count()
-            pending_review = TamperDetection.query.filter_by(review_status='pending').count()
-            confirmed_tamper = TamperDetection.query.filter_by(review_status='confirmed').count()
-            false_positives = TamperDetection.query.filter_by(review_status='false_positive').count()
+            # Get recent tamper detections (filtered for analysts)
+            if analyst_site_ids is not None:
+                # Filter detections by submission's site
+                recent_detections = TamperDetection.query.join(
+                    WaterLevelSubmission, TamperDetection.submission_id == WaterLevelSubmission.id
+                ).filter(
+                    WaterLevelSubmission.site_id.in_(analyst_site_ids) if analyst_site_ids else False
+                ).order_by(TamperDetection.detected_at.desc()).limit(20).all()
+            else:
+                recent_detections = TamperDetection.query.order_by(
+                    TamperDetection.detected_at.desc()
+                ).limit(20).all()
             
-            # Get submission-based statistics
-            total_submissions = WaterLevelSubmission.query.count()
-            suspicious_submissions = WaterLevelSubmission.query.filter(
-                WaterLevelSubmission.tamper_score > 0.7
-            ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
+            # Get statistics - filtered for analyst
+            if analyst_site_ids is not None:
+                # Build base query filter for submissions in analyst's sites
+                submission_filter = WaterLevelSubmission.site_id.in_(analyst_site_ids) if analyst_site_ids else WaterLevelSubmission.id == -1
+                
+                total_detections = TamperDetection.query.join(
+                    WaterLevelSubmission
+                ).filter(submission_filter).count()
+                pending_review = TamperDetection.query.join(
+                    WaterLevelSubmission
+                ).filter(submission_filter, TamperDetection.review_status == 'pending').count()
+                confirmed_tamper = TamperDetection.query.join(
+                    WaterLevelSubmission
+                ).filter(submission_filter, TamperDetection.review_status == 'confirmed').count()
+                false_positives = TamperDetection.query.join(
+                    WaterLevelSubmission
+                ).filter(submission_filter, TamperDetection.review_status == 'false_positive').count()
+                
+                total_submissions = WaterLevelSubmission.query.filter(submission_filter).count()
+                suspicious_submissions = WaterLevelSubmission.query.filter(
+                    submission_filter,
+                    WaterLevelSubmission.tamper_score > 0.7
+                ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
+                
+                clean_submissions = WaterLevelSubmission.query.filter(
+                    submission_filter,
+                    db.or_(
+                        WaterLevelSubmission.tamper_score == None,
+                        WaterLevelSubmission.tamper_score <= 0.3
+                    )
+                ).count()
+                
+                avg_score_result = db.session.query(
+                    db.func.avg(WaterLevelSubmission.tamper_score)
+                ).filter(submission_filter, WaterLevelSubmission.tamper_score != None).scalar()
+            else:
+                # Admin/Supervisor see all
+                total_detections = TamperDetection.query.count()
+                pending_review = TamperDetection.query.filter_by(review_status='pending').count()
+                confirmed_tamper = TamperDetection.query.filter_by(review_status='confirmed').count()
+                false_positives = TamperDetection.query.filter_by(review_status='false_positive').count()
+                
+                total_submissions = WaterLevelSubmission.query.count()
+                suspicious_submissions = WaterLevelSubmission.query.filter(
+                    WaterLevelSubmission.tamper_score > 0.7
+                ).order_by(WaterLevelSubmission.tamper_score.desc()).limit(10).all()
+                
+                clean_submissions = WaterLevelSubmission.query.filter(
+                    db.or_(
+                        WaterLevelSubmission.tamper_score == None,
+                        WaterLevelSubmission.tamper_score <= 0.3
+                    )
+                ).count()
+                
+                avg_score_result = db.session.query(
+                    db.func.avg(WaterLevelSubmission.tamper_score)
+                ).filter(WaterLevelSubmission.tamper_score != None).scalar()
             
-            # Count submissions by tamper status
-            clean_submissions = WaterLevelSubmission.query.filter(
-                db.or_(
-                    WaterLevelSubmission.tamper_score == None,
-                    WaterLevelSubmission.tamper_score <= 0.3
-                )
-            ).count()
-            
-            # Calculate average tamper score across all submissions
-            avg_score_result = db.session.query(
-                db.func.avg(WaterLevelSubmission.tamper_score)
-            ).filter(WaterLevelSubmission.tamper_score != None).scalar()
             avg_tamper_score = round(avg_score_result or 0, 3)
             
             return jsonify({
@@ -2884,8 +2982,20 @@ def create_app(config_name='default'):
     @app.route('/api/weather/heatmap')
     @login_required
     def weather_heatmap_data():
-        """Get data for weather heatmap"""
-        sites = MonitoringSite.query.filter_by(is_active=True).all()
+        """Get data for weather heatmap - filtered by role"""
+        # Role-based site filtering
+        if current_user.role == 'central_analyst':
+            analyst_site_ids = get_analyst_site_ids() or []
+            if analyst_site_ids:
+                sites = MonitoringSite.query.filter(
+                    MonitoringSite.id.in_(analyst_site_ids),
+                    MonitoringSite.is_active == True
+                ).all()
+            else:
+                sites = []
+        else:
+            sites = MonitoringSite.query.filter_by(is_active=True).all()
+            
         heatmap_data = []
         
         for site in sites:
