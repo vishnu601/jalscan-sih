@@ -148,7 +148,7 @@
                                     <div class="spinner-border spinner-border-sm text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
-                                    <span class="ms-2">Analyzing with OpenCV...</span>
+                                    <span class="ms-2">Analyzing...</span>
                                 </div>
                                 <div id="ai-result" class="d-none">
                                     <p class="mb-1"><strong>Water Level:</strong> <span id="ai-water-level"
@@ -225,7 +225,7 @@
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2">Analyzing with OpenCV...</p>
+                        <p class="mt-2">Analyzing...</p>
                     </div>
 
                     <div id="gauge-result" class="d-none">
@@ -997,6 +997,15 @@
                         </div>`;
                     }
 
+                    // Demo notice for phone images
+                    let demoNotice = '';
+                    if (data.is_phone_image) {
+                        demoNotice = `<div class="alert alert-warning mt-2 mb-0 py-2 px-3">
+                            <i class="bi bi-phone"></i> <strong>Phone Image Detected</strong>
+                            <p class="mb-0 small">This appears to be a photo of a phone screen. Allowed for demo purposes only.</p>
+                        </div>`;
+                    }
+
                     resultDiv.innerHTML = `
                         <div class="alert ${data.tamper_detected ? 'alert-warning' : 'alert-success'}">
                             <div class="d-flex justify-content-between align-items-start mb-2">
@@ -1008,6 +1017,7 @@
                             <small class="d-block text-center text-muted">Confidence: ${(data.confidence * 100).toFixed(0)}%</small>
                             ${gaugeInfo}
                             <p class="mb-0 mt-2 small">${data.message || data.reason || ''}</p>
+                            ${demoNotice}
                             ${tamperWarning}
                             ${voiceWarning}
                             ${suggestionsHtml}

@@ -73,8 +73,8 @@ def analyze_water_gauge(image_path):
     try:
         genai.configure(api_key=api_key)
         
-        # Use gemini-2.5-flash-lite for vision tasks
-        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        # Use gemini-2.5-flash for vision tasks
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Load the image
         img = Image.open(image_path)
@@ -90,19 +90,20 @@ You must first validate the scene, then extract the water level reading from an 
 
 **ANALYSIS PROTOCOL (Follow these steps strictly)**
 
-**STEP 0: SCENE VALIDATION (CRITICAL - DO THIS FIRST)**
-Before reading any numbers, verify the scene is legitimate:
-- Is there a REAL water body visible (river, stream, flood water)?
-- Is there a REAL physical gauge/staff installed IN the water?
-- Is the gauge partially submerged (water touching the gauge)?
+**STEP 0: SCENE DETECTION**
+Before reading any numbers, identify the scene type:
+- Is this a REAL water body with a physical gauge in water? (ideal)
+- Is this a phone/screen showing a gauge photo? (allowed for demo, flag it)
+- Is there NO gauge visible at all? (invalid)
 
-**INVALID SCENE INDICATORS (set scene_valid=false if ANY are true):**
-- Image of a phone/screen showing a gauge photo (photo of a photo)
-- Gauge is on DRY land with no water visible
-- Image is just a ruler/measuring tape NOT in water
-- Indoor image or clearly not at a water body
-- No gauge visible at all in the image
-- Gauge appears to be photoshopped/edited into scene
+**SCENE TYPES:**
+- "real_scene": Physical gauge actually installed in water at a river/stream
+- "phone_image": Image of a phone/screen displaying a gauge photo (ALLOWED FOR DEMO)
+- "dry_gauge": Gauge visible but no water present
+- "no_gauge": No gauge visible in the image
+- "invalid": Indoor/irrelevant image
+
+**NOTE:** Phone images are ALLOWED for demo purposes. If detected, set is_phone_image=true and still attempt to read the gauge.
 
 1.  **Identify Visible Markers:**
     * List all clearly legible numbers on the gauge from Top to Bottom.
@@ -133,7 +134,9 @@ Before reading any numbers, verify the scene is legitimate:
 **RESPONSE FORMAT**
 Return ONLY this JSON structure:
 {
+    "scene_type": "real_scene",
     "scene_valid": true,
+    "is_phone_image": false,
     "scene_issue": null,
     "no_gauge_detected": false,
     "visible_markers": [7, 6, 5],
@@ -152,16 +155,18 @@ Return ONLY this JSON structure:
 }
 
 **FIELD EXPLANATIONS:**
-- scene_valid: true ONLY if image shows real gauge IN water. false if fake/inappropriate scene.
-- scene_issue: If scene_valid=false, explain why (e.g., "No water visible", "Photo of a phone screen", "Gauge not in water")
+- scene_type: "real_scene", "phone_image", "dry_gauge", "no_gauge", or "invalid"
+- scene_valid: true if gauge reading is possible (real_scene OR phone_image). false for no_gauge/invalid.
+- is_phone_image: true if image is a phone/screen showing a gauge photo (ALLOWED FOR DEMO)
+- scene_issue: Description if scene has issues
 - no_gauge_detected: true if no gauge/staff visible in image at all
 - visible_markers: Array of numbers visible on the gauge (from top to bottom)
 - scale_direction: "increases upwards" or "increases downwards"
 - water_line_position: Detailed description of where water meets gauge relative to markers
 - reasoning: Your step-by-step chain of thought logic
-- water_level: Final reading in METERS (decimal). Set to null if unreadable OR if scene_valid=false.
-- confidence: 0.0 to 1.0 (High=0.8+, Medium=0.5-0.8, Low=<0.5)
-- is_valid: true ONLY if scene_valid=true AND gauge is readable. false otherwise.
+- water_level: Final reading in METERS (decimal). Set to null if unreadable.
+- confidence: 0.0 to 1.0 (High=0.8+, Medium=0.5-0.8, Low=<0.5). Lower by 0.1 if phone_image.
+- is_valid: true if gauge is readable (even from phone image). false if no reading possible.
 - gauge_location: Where in the image the gauge appears
 - tamper_detected: true if image shows manipulation signs
 - tamper_reason: Explanation if tampered
@@ -170,7 +175,7 @@ Return ONLY this JSON structure:
 - reason: Brief summary of your reading
 
 **CRITICAL RULES:**
-1. ALWAYS validate scene first - reject photos of screens, dry gauges, missing water
+1. Phone images ARE ALLOWED for demo - set is_phone_image=true and still read the gauge
 2. ALWAYS verify scale direction before reading
 3. If water is BELOW the lowest visible number, the reading MUST be less than that number
 4. Count ticks carefully - don't estimate

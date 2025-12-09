@@ -80,6 +80,8 @@ class GeminiWaterLevelDetector:
                 # Check scene validation first
                 scene_valid = result.get('scene_valid', True)
                 no_gauge = result.get('no_gauge_detected', False)
+                is_phone_image = result.get('is_phone_image', False)
+                scene_type = result.get('scene_type', 'unknown')
                 
                 # Check for tamper detection
                 tamper_detected = result.get('tamper_detected', False)
@@ -89,9 +91,11 @@ class GeminiWaterLevelDetector:
                     'water_level': result.get('water_level'),
                     'confidence': result.get('confidence', 0.0),
                     'is_valid': result.get('is_valid', False),
-                    'reason': result.get('reason', 'OpenCV analysis'),
-                    # Scene validation fields
+                    'reason': result.get('reason', 'Analysis complete'),
+                    # Scene detection fields
+                    'scene_type': scene_type,
                     'scene_valid': scene_valid,
+                    'is_phone_image': is_phone_image,
                     'scene_issue': result.get('scene_issue'),
                     'no_gauge_detected': no_gauge,
                     # Enhanced fields
@@ -105,6 +109,11 @@ class GeminiWaterLevelDetector:
                     'image_quality': result.get('image_quality', 'unknown'),
                     'suggestions': result.get('suggestions', [])
                 }
+                
+                # Add demo notice for phone images
+                if is_phone_image and response.get('water_level') is not None:
+                    response['demo_notice'] = "📱 Image from phone screen - Allowed for demo purposes"
+                    response['reason'] = f"{response.get('reason', '')} [Demo: Phone image detected]"
                 
                 # Handle invalid scene (gauge not in water, etc.)
                 if not scene_valid:
