@@ -551,11 +551,19 @@
     <!-- Global JavaScript -->
     <script>
         // PWA Install Prompt
-        let deferredPrompt;
+        let deferredPrompt = null;
         const installPromptModal = new bootstrap.Modal(document.getElementById('installPrompt'));
         const installBanner = document.getElementById('installBanner');
 
+        // Detect iOS Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+        const isIOSSafari = isIOS && isSafari;
+
+        console.log('[PWA] iOS:', isIOS, 'Safari:', isSafari, 'iOS Safari:', isIOSSafari);
+
         window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('[PWA] beforeinstallprompt fired!');
             // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
             // Stash the event so it can be triggered later
@@ -571,16 +579,33 @@
                 // Show banner immediately
                 if (installBanner) {
                     installBanner.classList.remove('d-none');
+                    console.log('[PWA] Showing install banner');
                 }
 
-                // Show modal after 15 seconds if banner still visible
+                // Show modal after 15 seconds if banner dismissed
                 setTimeout(() => {
-                    if (deferredPrompt && !isAppInstalled() && installBanner.classList.contains('d-none')) {
+                    if (deferredPrompt && !isAppInstalled() && installBanner && installBanner.classList.contains('d-none')) {
                         installPromptModal.show();
                     }
                 }, 15000);
             }
         });
+
+        // For iOS Safari, show banner with manual instructions
+        if (isIOSSafari && !isAppInstalled()) {
+            console.log('[PWA] iOS Safari detected, showing manual install banner');
+            setTimeout(() => {
+                const dismissed = localStorage.getItem('pwaInstallDismissed');
+                if (!dismissed && installBanner) {
+                    // Change banner text for iOS
+                    const msgDiv = installBanner.querySelector('small');
+                    if (msgDiv) {
+                        msgDiv.textContent = 'Tap Share ↑ then "Add to Home Screen"';
+                    }
+                    installBanner.classList.remove('d-none');
+                }
+            }, 2000);
+        }
 
         // Install button in modal
         document.getElementById('installBtn').addEventListener('click', async () => {
@@ -597,23 +622,51 @@
         // Dismiss banner
         if (document.getElementById('dismissBanner')) {
             document.getElementById('dismissBanner').addEventListener('click', () => {
-                installBanner.classList.add('d-none');
+                if (installBanner) installBanner.classList.add('d-none');
                 localStorage.setItem('pwaInstallDismissed', 'true');
                 localStorage.setItem('pwaInstallDismissedTime', Date.now().toString());
             });
         }
 
         async function triggerInstall() {
+            console.log('[PWA] triggerInstall called, deferredPrompt:', !!deferredPrompt);
+
             if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
-                    if (installBanner) installBanner.classList.add('d-none');
+                try {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log('[PWA] User choice:', outcome);
+                    if (outcome === 'accepted') {
+                        console.log('[PWA] User accepted the install prompt');
+                        if (installBanner) installBanner.classList.add('d-none');
+                    }
+                    deferredPrompt = null;
+                    installPromptModal.hide();
+                } catch (err) {
+                    console.error('[PWA] Install error:', err);
+                    showManualInstallInstructions();
                 }
-                deferredPrompt = null;
-                installPromptModal.hide();
+            } else {
+                // No deferred prompt - show manual instructions
+                console.log('[PWA] No deferredPrompt, showing manual instructions');
+                showManualInstallInstructions();
             }
+        }
+
+        function showManualInstallInstructions() {
+            installPromptModal.hide();
+            if (installBanner) installBanner.classList.add('d-none');
+
+            let instructions = '';
+            if (isIOS) {
+                instructions = '📱 To install on iOS:\n\n1. Tap the Share button (square with arrow)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" to confirm';
+            } else if (/Android/.test(navigator.userAgent)) {
+                instructions = '📱 To install on Android:\n\n1. Tap the menu (⋮) in your browser\n2. Tap "Add to Home Screen" or "Install App"\n3. Confirm the installation';
+            } else {
+                instructions = '💻 To install:\n\n1. Click the install icon in your browser\'s address bar\n2. Or use your browser\'s menu to "Install App"';
+            }
+
+            alert(instructions);
         }
 
         function isAppInstalled() {

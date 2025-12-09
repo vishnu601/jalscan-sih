@@ -1,6 +1,6 @@
-const CACHE_NAME = 'jalscan-v13';
-const STATIC_CACHE = 'jalscan-static-v13';
-const DYNAMIC_CACHE = 'jalscan-dynamic-v13';
+const CACHE_NAME = 'jalscan-v14';
+const STATIC_CACHE = 'jalscan-static-v14';
+const DYNAMIC_CACHE = 'jalscan-dynamic-v14';
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [
