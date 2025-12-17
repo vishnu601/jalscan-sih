@@ -331,13 +331,12 @@ python app.py
 ## 👨‍💻 Team
 
 **Developed for Smart India Hackathon 2024**
-- **Vishnu M** - Lead Developer & Architect
 
 ---
 
 ## 📄 License
 
-This project is developed for educational and demonstration purposes for the Smart India Hackathon 2024.
+This project is developed for educational and demonstration purposes for the Smart India Hackathon 2025.
 
 ---
 
